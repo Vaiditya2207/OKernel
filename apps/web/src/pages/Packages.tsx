@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Layout } from '../components/layout/Layout';
 import { Button } from '../components/ui/Button';
 import { supabase } from '../lib/supabase';
@@ -15,22 +15,11 @@ interface PollVotes {
 
 export const Packages = () => {
     const [votes, setVotes] = useState<PollVotes>({ javascript: 0, rust: 0, go: 0, java: 0, cpp: 0 });
-    const [userVote, setUserVote] = useState<string | null>(null);
+    const [userVote, setUserVote] = useState<string | null>(() => localStorage.getItem('okernel_language_vote'));
     const [voteStatus, setVoteStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [copied, setCopied] = useState<string | null>(null);
 
-    useEffect(() => {
-        // Check if user already voted (localStorage)
-        const existingVote = localStorage.getItem('okernel_language_vote');
-        if (existingVote) {
-            setUserVote(existingVote);
-        }
-
-        // Fetch current votes
-        fetchVotes();
-    }, []);
-
-    const fetchVotes = async () => {
+    const fetchVotes = useCallback(async () => {
         const { data, error } = await supabase
             .from('language_poll')
             .select('language, votes')
@@ -45,7 +34,13 @@ export const Packages = () => {
             });
             setVotes(voteMap);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        // Fetch current votes
+        // eslint-disable-next-line
+        void fetchVotes();
+    }, [fetchVotes]);
 
     const handleVote = async (language: string) => {
         if (userVote) return; // Already voted

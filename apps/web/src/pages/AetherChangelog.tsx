@@ -1,6 +1,6 @@
 import React from 'react';
 import { Layout } from '../components/layout/Layout';
-import { Calendar, GitCommit, Zap, Palette, Layers, ArrowRight } from 'lucide-react';
+import { Zap, Palette, ArrowRight } from 'lucide-react';
 
 export const AetherChangelog = () => {
     return (

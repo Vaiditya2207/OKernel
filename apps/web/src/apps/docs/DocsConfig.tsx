@@ -13,7 +13,6 @@ import { PersistenceDocs } from './pages/PersistenceDocs';
 import { CodeTracerDocs } from './pages/CodeTracerDocs';
 import { PackagesDocs } from './pages/PackagesDocs';
 import { SitemapPage } from './pages/SitemapPage';
-import { AetherDocs } from '../../pages/Docs/AetherDocs';
 
 export type DocRoute = {
     id: string;
