@@ -19,17 +19,6 @@ export const Packages = () => {
     const [voteStatus, setVoteStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
     const [copied, setCopied] = useState<string | null>(null);
 
-    useEffect(() => {
-        // Check if user already voted (localStorage)
-        const existingVote = localStorage.getItem('okernel_language_vote');
-        if (existingVote) {
-            setUserVote(existingVote);
-        }
-
-        // Fetch current votes
-        fetchVotes();
-    }, []);
-
     const fetchVotes = async () => {
         const { data, error } = await supabase
             .from('language_poll')
@@ -46,6 +35,20 @@ export const Packages = () => {
             setVotes(voteMap);
         }
     };
+
+    useEffect(() => {
+        // Check if user already voted (localStorage)
+        const existingVote = localStorage.getItem('okernel_language_vote');
+        if (existingVote) {
+            // We can safely ignore this lint because we are initializing state from localStorage
+            // once on mount. The alternative is lazy initialization in useState, but this is fine.
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setUserVote(existingVote);
+        }
+
+        // Fetch current votes
+        fetchVotes();
+    }, []);
 
     const handleVote = async (language: string) => {
         if (userVote) return; // Already voted

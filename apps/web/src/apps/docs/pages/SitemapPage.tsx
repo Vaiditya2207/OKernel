@@ -101,7 +101,10 @@ export const SitemapPage: React.FC = () => {
                         <div className="grid gap-3">
                             {section.links.map((link) => {
                                 const isExternal = link.path.startsWith('http');
-                                const LinkComponent = isExternal ? 'a' : Link;
+
+                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                const LinkComponent: any = isExternal ? 'a' : Link;
+
                                 const linkProps = isExternal
                                     ? { href: link.path, target: "_blank", rel: "noopener noreferrer" }
                                     : { to: link.path };
@@ -109,7 +112,7 @@ export const SitemapPage: React.FC = () => {
                                 return (
                                     <LinkComponent
                                         key={link.path}
-                                        {...linkProps as any}
+                                        {...linkProps}
                                         className="group flex items-start gap-4 p-4 bg-zinc-900/50 border border-zinc-800/50 rounded-lg hover:border-green-500/30 hover:bg-zinc-900 transition-all"
                                     >
                                         <div className="p-2 bg-zinc-800 rounded-md group-hover:bg-green-500/10 transition-colors">

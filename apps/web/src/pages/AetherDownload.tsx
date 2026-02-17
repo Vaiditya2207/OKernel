@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Layout } from '../components/layout/Layout';
 import { Button } from '../components/ui/Button';
-import { Download, Package, Calendar, FileText, CheckCircle, AlertTriangle, ShieldAlert, ArrowDown } from 'lucide-react';
+import { Download, Package, Calendar, FileText, CheckCircle, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { config } from '../config';
 
 interface AetherVersion {

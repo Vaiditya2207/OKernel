@@ -1,5 +1,5 @@
 import React from 'react';
-import { Cpu, Terminal, Zap, Settings, Layers, Keyboard, Code, FileCode, ArrowRight } from 'lucide-react';
+import { Zap, Settings, Layers, Keyboard, Code, FileCode, ArrowRight } from 'lucide-react';
 
 export const AetherDocs = () => {
     return (
