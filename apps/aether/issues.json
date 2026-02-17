@@ -1,0 +1,102 @@
+[
+  {
+    "title": "Buffer Overflow in aether_get_cwd",
+    "severity": "High",
+    "affected_files": [
+      {
+        "file_path": "apps/aether/libaether/src/main.zig",
+        "line_number": 257
+      }
+    ],
+    "referenced_code": "const to_copy = @min(len - 1, path_len);\n@memcpy(buf[0..to_copy], path[0..to_copy]);\nbuf[to_copy] = 0;",
+    "potential_fix": "Add a check `if (len == 0) return 0;` before calculating `to_copy`. If `len` is 0, `len - 1` wraps around to MAX_USIZE, causing a buffer overflow."
+  },
+  {
+    "title": "Buffer Overflow in aether_get_tty",
+    "severity": "High",
+    "affected_files": [
+      {
+        "file_path": "apps/aether/libaether/src/main.zig",
+        "line_number": 242
+      }
+    ],
+    "referenced_code": "const to_copy = @min(len - 1, name_len);\n@memcpy(buf[0..to_copy], p.tty_name[0..to_copy]);\nbuf[to_copy] = 0;",
+    "potential_fix": "Add a check `if (len == 0) return 0;` before calculating `to_copy`. If `len` is 0, `len - 1` wraps around to MAX_USIZE, causing a buffer overflow."
+  },
+  {
+    "title": "Uninitialized Memory Access in Grid Resize Error Handling",
+    "severity": "High",
+    "affected_files": [
+      {
+        "file_path": "apps/aether/libaether/src/grid.zig",
+        "line_number": 403
+      }
+    ],
+    "referenced_code": "for (new_active) |*row| {\n     row.* = try Row.init(self.allocator, new_cols);\n}\nerrdefer {\n     for (new_active) |*r| r.deinit();\n}",
+    "potential_fix": "Track the number of successfully initialized rows using a counter (e.g., `initialized_rows`). In the `errdefer` block, only iterate and `deinit()` the rows up to `initialized_rows`. The current implementation calls `deinit()` on uninitialized/garbage memory if `Row.init` fails mid-loop."
+  },
+  {
+    "title": "Zombie Processes due to Missing waitpid",
+    "severity": "Medium",
+    "affected_files": [
+      {
+        "file_path": "apps/aether/libaether/src/pty.zig",
+        "line_number": 114
+      }
+    ],
+    "referenced_code": "const pid = try std.posix.fork();\nif (pid == 0) {\n    // Child ...\n}\n// Parent\n_ = c.close(slave);",
+    "potential_fix": "Implement a signal handler for `SIGCHLD` or a dedicated reaper thread that calls `waitpid` on terminated child processes to prevent zombie processes accumulation."
+  },
+  {
+    "title": "Incomplete wcwidth Implementation",
+    "severity": "Medium",
+    "affected_files": [
+      {
+        "file_path": "apps/aether/libaether/src/terminal.zig",
+        "line_number": 490
+      }
+    ],
+    "referenced_code": "fn wcwidth(u: u32) u8 {\n    if (u < 0x7F) return 1;\n    // Basic CJK / Emoji ranges\n    // ...",
+    "potential_fix": "Replace the partial `wcwidth` implementation with a comprehensive one that covers all modern Unicode wide characters (e.g., using `libc`'s `wcwidth` if available and reliable, or a complete lookup table) to avoid rendering artifacts."
+  },
+  {
+    "title": "High Energy Consumption in Renderer",
+    "severity": "Medium",
+    "affected_files": [
+      {
+        "file_path": "apps/aether/AetherApp/Sources/AetherApp/Rendering/Renderer.swift",
+        "line_number": 230
+      }
+    ],
+    "referenced_code": "// Always redraw at 30fps for smooth cursor blink.\n// The isDirty check was skipping frames when idle, preventing cursor animation.\nforceNextFrame = false",
+    "potential_fix": "Implement logic to only trigger a redraw when the terminal content is dirty (`isDirty`) or when the cursor blink state actually changes (calculate the next toggle time). Avoid forcing a redraw every frame when idle."
+  },
+  {
+    "title": "Race Condition in Resize Logic",
+    "severity": "Medium",
+    "affected_files": [
+      {
+        "file_path": "apps/aether/AetherApp/Sources/AetherApp/Rendering/Renderer.swift",
+        "line_number": 161
+      },
+      {
+        "file_path": "apps/aether/AetherApp/Sources/AetherApp/Rendering/Renderer.swift",
+        "line_number": 129
+      }
+    ],
+    "referenced_code": "func resize(drawableSize size: CGSize, viewWidth: CGFloat) {\n    // ...\n    recalculateGridSizeInternal()\n}\n\nfunc mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {\n    // ...\n    viewportSize = SIMD2<Float>(Float(size.width), Float(size.height))\n}",
+    "potential_fix": "Synchronize viewport updates and grid resizing. Ensure that `viewportSize` updates in `mtkView` and background `resize` calls are coordinated (e.g., using the session lock for all state updates) to prevent `draw` from using a viewport size that mismatches the current grid dimensions."
+  },
+  {
+    "title": "Hardcoded Color Mapping Coupling",
+    "severity": "Low",
+    "affected_files": [
+      {
+        "file_path": "apps/aether/AetherApp/Sources/AetherApp/Rendering/Renderer.swift",
+        "line_number": 704
+      }
+    ],
+    "referenced_code": "let defaults: [UInt32] = [\n    0xFF000000, // Black\n    // ...\n]",
+    "potential_fix": "Decouple the renderer from specific ARGB values used in the Zig core. Expose palette indices (0-15) from the core `Cell` or provide an API to query the current default color values dynamically, ensuring themes work correctly even if core defaults change."
+  }
+]
