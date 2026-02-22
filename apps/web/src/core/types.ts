@@ -15,10 +15,11 @@ export interface Process {
     completionTime: number | null;
     waitingTime: number;
     turnaroundTime: number;
+
+    // MLFQ
+    mlfqLevel?: number; // 0, 1, 2
 }
-
-export type AlgorithmType = 'FCFS' | 'SJF' | 'SRTF' | 'RR' | 'PRIORITY';
-
+export type AlgorithmType = 'FCFS' | 'SJF' | 'SRTF' | 'RR' | 'PRIORITY' | 'MLFQ';
 export interface GanttBlock {
     processId: number | null;
     startTime: number;
@@ -37,6 +38,9 @@ export interface SimulationState {
     algorithm: AlgorithmType;
     timeQuantum: number;
     quantumRemaining: number; // For RR
-    isPlaying: boolean;
     speed: number;
+
+    // MLFQ State
+    mlfqBoostTime: number;
+    mlfqBoostTicks: number; // Ticks since last boost
 }

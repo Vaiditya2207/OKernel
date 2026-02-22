@@ -96,7 +96,7 @@ export const CPUSchedulerPage = () => {
                             <div className="bg-card border border-border rounded-lg p-1 relative overflow-hidden flex flex-col shadow-sm h-full">
                                 <div className="absolute top-2 left-3 text-xs font-bold text-muted-foreground uppercase tracking-wider z-20">Memory Buffer</div>
                                 <div className="h-full w-full pt-6">
-                                    <ReadyQueue queue={state.readyQueue} processes={state.processes} />
+                                    <ReadyQueue queue={state.readyQueue} processes={state.processes} algorithm={state.algorithm} />
                                 </div>
                             </div>
                         </div>
@@ -147,6 +147,6 @@ export const CPUSchedulerPage = () => {
                     </div>
                 </div>
             </LayoutGroup>
-        </Layout>
+        </Layout >
     );
 };

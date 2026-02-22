@@ -4,6 +4,7 @@ import { sjf } from './algos/sjf';
 import { srtf } from './algos/srtf';
 import { round_robin, rr_should_preempt } from './algos/round_robin';
 import { priority } from './algos/priority';
+import { mlfq, MLFQ_QUANTUMS } from './algos/mlfq';
 
 export const tick = (state: SimulationState): SimulationState => {
     // 1. Clone Shallow State
@@ -18,6 +19,24 @@ export const tick = (state: SimulationState): SimulationState => {
     // Build id -> index map (O(N) once per tick)
     const indexMap = new Map<number, number>();
     newState.processes.forEach((p, i) => indexMap.set(p.id, i));
+
+    // MLFQ Pre-tick logic: Priority Boost
+    if (newState.algorithm === 'MLFQ') {
+        newState.mlfqBoostTicks++;
+        if (newState.mlfqBoostTicks >= newState.mlfqBoostTime) {
+            // Priority boost: move all ready and running processes back to Q0
+            newState.mlfqBoostTicks = 0;
+            newState.processes.forEach((p, index) => {
+                if (p.state === 'READY' || p.state === 'RUNNING') {
+                    newState.processes[index] = { ...p, mlfqLevel: 0 };
+                }
+            });
+            // Running process might need a refreshed quantum since it was boosted
+            if (newState.runningProcessId !== null) {
+                newState.quantumRemaining = MLFQ_QUANTUMS[0];
+            }
+        }
+    }
 
     // 2. Handle Arrivals
     newState.processes.forEach((p, index) => {
@@ -38,6 +57,7 @@ export const tick = (state: SimulationState): SimulationState => {
             case 'SRTF': return srtf(queue, procs);
             case 'RR': return round_robin(queue, procs);
             case 'PRIORITY': return priority(queue, procs);
+            case 'MLFQ': return mlfq(queue, procs);
             default: return fcfs(queue, procs);
         }
     };
@@ -50,6 +70,31 @@ export const tick = (state: SimulationState): SimulationState => {
     if (newState.algorithm === 'RR' && processToRunId !== null) {
         if (rr_should_preempt(newState.quantumRemaining)) {
             shouldPreempt = true;
+        }
+    }
+
+    // Check preemption for MLFQ
+    if (newState.algorithm === 'MLFQ' && processToRunId !== null) {
+        if (newState.quantumRemaining <= 0) {
+            shouldPreempt = true;
+            // Demote the process
+            const idx = indexMap.get(processToRunId);
+            if (idx !== undefined) {
+                const currentProc = newState.processes[idx];
+                const currentLevel = currentProc.mlfqLevel ?? 0;
+                if (currentLevel < 2) {
+                    newState.processes[idx] = {
+                        ...currentProc,
+                        mlfqLevel: currentLevel + 1
+                    };
+                }
+            }
+        } else {
+            // SRTF-like preemption: a higher priority process might have arrived or been boosted
+            const bestCandidate = selectProcess('MLFQ', [...newState.readyQueue, processToRunId], newState.processes);
+            if (bestCandidate !== null && bestCandidate !== processToRunId) {
+                shouldPreempt = true;
+            }
         }
     }
 
@@ -77,7 +122,7 @@ export const tick = (state: SimulationState): SimulationState => {
 
         // Pick next
         const nextId = selectProcess(newState.algorithm, newState.readyQueue, newState.processes);
-        
+
         if (nextId !== null) {
             const idx = indexMap.get(nextId);
             if (idx !== undefined) {
@@ -90,6 +135,9 @@ export const tick = (state: SimulationState): SimulationState => {
 
                 if (newState.algorithm === 'RR') {
                     newState.quantumRemaining = newState.timeQuantum;
+                } else if (newState.algorithm === 'MLFQ') {
+                    const level = newState.processes[idx].mlfqLevel ?? 0;
+                    newState.quantumRemaining = MLFQ_QUANTUMS[level];
                 }
 
                 newState.runningProcessId = nextId;
@@ -115,7 +163,7 @@ export const tick = (state: SimulationState): SimulationState => {
 
             newState.processes[idx] = updatedProc;
 
-            if (newState.algorithm === 'RR') {
+            if (newState.algorithm === 'RR' || newState.algorithm === 'MLFQ') {
                 newState.quantumRemaining--;
             }
 

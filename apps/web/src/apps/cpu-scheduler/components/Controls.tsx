@@ -53,6 +53,7 @@ export const Controls: React.FC<Props> = ({ state, setState, onReset }) => {
                         <option value="SRTF">Shortest Remaining Time</option>
                         <option value="RR">Round Robin</option>
                         <option value="PRIORITY">Priority</option>
+                        <option value="MLFQ">Multi-Level Feedback Queue (MLFQ)</option>
                     </select>
                     <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none group-hover:text-white transition-colors" />
                 </div>
@@ -66,6 +67,21 @@ export const Controls: React.FC<Props> = ({ state, setState, onReset }) => {
                         type="number"
                         value={state.timeQuantum}
                         onChange={e => setState(s => ({ ...s, timeQuantum: Number(e.target.value) }))}
+                        className="bg-black border border-zinc-700 text-white h-8 w-16 px-2 focus:outline-none focus:border-primary text-center"
+                        min={1}
+                        disabled={state.isPlaying}
+                    />
+                </div>
+            )}
+
+            {/* MLFQ Boost Time (Conditional) */}
+            {state.algorithm === 'MLFQ' && (
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
+                    <span className="text-zinc-500 select-none">BOOST_TICKS:</span>
+                    <input
+                        type="number"
+                        value={state.mlfqBoostTime}
+                        onChange={e => setState(s => ({ ...s, mlfqBoostTime: Number(e.target.value) }))}
                         className="bg-black border border-zinc-700 text-white h-8 w-16 px-2 focus:outline-none focus:border-primary text-center"
                         min={1}
                         disabled={state.isPlaying}
