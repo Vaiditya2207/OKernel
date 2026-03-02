@@ -1,0 +1,4 @@
+## 2026-03-02 - Arbitrary File Write via Unsanitized Filename
+Vulnerability Pattern: Path Traversal and Absolute Path Overwrite due to trusting user-provided filename strings. Specifically, `axum::extract::Multipart` filenames are joined using `std::path::PathBuf::join` without prior sanitization.
+Systemic Cause: The upload logic assumes filenames extracted from multipart forms are safe and only contain the base filename. However, the filename is completely attacker-controlled and can contain absolute paths or relative traversal characters (`..`). The API lacks centralized validation or sanitization middleware for file operations.
+Auditor Note: In future scans, always check `axum::extract::Multipart` usage and any file system operations (like `tokio_fs::write`) for path sanitization. Verify if `PathBuf::join` is used with untrusted data, as appending an absolute path replaces the original base path entirely.
