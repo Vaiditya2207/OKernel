@@ -147,7 +147,13 @@ struct AetherApp: App {
                     showStartup = true
                 }
                 
-                // Auto-restore session logic
+                // Trigger async session loading — does NOT block main thread
+                SessionManager.shared.loadAsync()
+            }
+            .onReceive(SessionManager.shared.$isLoaded) { loaded in
+                guard loaded else { return }
+                
+                // Sessions are now loaded — handle restore logic
                 let strategy = configManager.config.session.restoreStrategy
                 let hasSavedSession = SessionManager.shared.restoreLastSession() != nil
                 
@@ -165,12 +171,10 @@ struct AetherApp: App {
                             // Auto-hide after 7 seconds
                             restoreTimer?.invalidate()
                             restoreTimer = Timer.scheduledTimer(withTimeInterval: 7.0, repeats: false) { _ in
-                                withAnimation(.easeOut(duration: 2.0)) { // Smooth fade out
+                                withAnimation(.easeOut(duration: 2.0)) {
                                     showRestoreToast = false
                                 }
                             }
-                            
-                            // Listen for ANY interaction to cancel restore possibility
                             setupInteractionListener()
                         }
                     case .never:

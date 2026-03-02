@@ -16,6 +16,9 @@ class TerminalSession: Identifiable, ObservableObject {
     // Notify when user does something (typing, clicking)
     let userInteractionOccurred = PassthroughSubject<Void, Never>()
     
+    // Publishes raw terminal output text for AI copilot triggers
+    let rawOutputSubject = PassthroughSubject<String, Never>()
+    
     // Shared lock for synchronizing access to the terminal pointer (Zig backend)
     // Used by both TerminalSession (polling) and TerminalRenderer (drawing/resizing)
     public let lock = NSRecursiveLock()
@@ -71,6 +74,22 @@ class TerminalSession: Identifiable, ObservableObject {
     
     func notifyInteraction() {
         userInteractionOccurred.send()
+    }
+    
+    // MARK: - Input
+    
+    /// Write a string to the terminal's PTY input.
+    func writeInput(_ string: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        
+        guard let term = terminal, !isClosing else { return }
+        guard let data = string.data(using: .utf8) else { return }
+        data.withUnsafeBytes { (ptr: UnsafeRawBufferPointer) in
+            if let baseAddress = ptr.baseAddress {
+                _ = aether_write_input(term, baseAddress.assumingMemoryBound(to: UInt8.self), ptr.count)
+            }
+        }
     }
 
     func resize(cols: Int, rows: Int) {
@@ -132,6 +151,32 @@ class TerminalSession: Identifiable, ObservableObject {
         if self.isLoading && aether_is_dirty(term) {
             DispatchQueue.main.async {
                 self.isLoading = false
+            }
+        }
+        
+        // Emit raw output for AI copilot hooks (only when new data arrived)
+        if aether_is_dirty(term) {
+            let rows = aether_get_rows(term)
+            let cols = aether_get_cols(term)
+            // Read last 3 rows only — enough for "command not found" detection without overhead
+            let startRow = rows > 3 ? rows - 3 : 0
+            var output = ""
+            for r in startRow..<rows {
+                for c in 0..<cols {
+                    if let cellPtr = aether_get_cell(term, r, c) {
+                        let cp = cellPtr.pointee.codepoint
+                        if cp > 0, let scalar = Unicode.Scalar(cp) {
+                            output.append(Character(scalar))
+                        }
+                    }
+                }
+                output.append("\n")
+            }
+            let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                DispatchQueue.main.async {
+                    self.rawOutputSubject.send(trimmed)
+                }
             }
         }
         
@@ -272,6 +317,41 @@ class TerminalSession: Identifiable, ObservableObject {
         return nil
     }
     
+    // MARK: - Context for AI
+    
+    /// Get recent visible terminal content as text for AI context.
+    func getRecentContext(lines: Int) -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        
+        guard let term = terminal else { return "" }
+        
+        let rows = Int(aether_get_rows(term))
+        let cols = Int(aether_get_cols(term))
+        let linesToRead = min(lines, rows)
+        let startRow = max(0, rows - linesToRead)
+        
+        var result: [String] = []
+        
+        for r in startRow..<rows {
+            var line = ""
+            for c in 0..<cols {
+                if let cellPtr = aether_get_cell(term, UInt32(r), UInt32(c)) {
+                    let cp = cellPtr.pointee.codepoint
+                    if cp > 0, let scalar = Unicode.Scalar(cp) {
+                        line.append(Character(scalar))
+                    } else {
+                        line.append(" ")
+                    }
+                }
+            }
+            // Trim trailing whitespace per line
+            result.append(line.replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression))
+        }
+        
+        return result.joined(separator: "\n")
+    }
+    
     // MARK: - History
     
     func getHistory() -> [SavedRow] {
@@ -284,8 +364,8 @@ class TerminalSession: Identifiable, ObservableObject {
         let cols = aether_get_cols(term)
         var history: [SavedRow] = []
         
-        // Performance: limit history to scrollbackLimit lines
-        let limit = UInt32(ConfigManager.shared.config.terminal.scrollbackLimit)
+        // Cap to maxHistoryRows to keep session files small
+        let limit = UInt32(SavedPane.maxHistoryRows)
         let start = count > limit ? count - limit : 0
         
         var cellBuf = [AetherCell](repeating: AetherCell(), count: Int(cols))
@@ -298,7 +378,9 @@ class TerminalSession: Identifiable, ObservableObject {
                     SavedCell(cp: cell.codepoint, fg: cell.fg_color, bg: cell.bg_color, f: cell.flags)
                 }
                 
-                history.append(SavedRow(cells: savedCells, wrapped: metadata.wrapped))
+                // Pack cells into binary Data for compact storage
+                let packedData = SavedRow.pack(cells: savedCells)
+                history.append(SavedRow(cellData: packedData, wrapped: metadata.wrapped))
             }
         }
         
@@ -314,7 +396,9 @@ class TerminalSession: Identifiable, ObservableObject {
         aether_terminal_clear_history(term)
         
         for row in history {
-            let aetherCells = row.cells.map { cell in
+            // Unpack binary cell data back into AetherCell array
+            let savedCells = row.unpackCells()
+            let aetherCells = savedCells.map { cell in
                 AetherCell(codepoint: cell.cp, fg_color: cell.fg, bg_color: cell.bg, flags: cell.f, semantic_id: 0)
             }
             
