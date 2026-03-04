@@ -1,0 +1,4 @@
+## 2026-03-04 - Unsanitized Filename in Aether Uploads
+Vulnerability Pattern: Arbitrary File Write / Path Traversal via `upload_handler` where `filename` extracted from a multipart form is used directly in `PathBuf::join` without sanitization.
+Systemic Cause: Rust's `PathBuf::join` replaces the base path entirely if the appended component is an absolute path. The application relies on raw user input (`field.file_name()`) rather than generating a safe filename or heavily sanitizing the provided one. While the `version` field is checked for traversals (`..`, `/`, `\`), the `filename` field receives no such checks.
+Auditor Note: Always check how filenames extracted from multipart forms or HTTP headers are joined with base paths. In Rust, `PathBuf::join` behavior with absolute paths is a frequent footgun. Look for missing validation/sanitization steps between data extraction and disk operations.
