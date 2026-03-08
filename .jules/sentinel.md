@@ -1,0 +1,4 @@
+## 2024-05-18 - Unsanitized PathBuf::join in Multipart Uploads
+Vulnerability Pattern: Using unsanitized filenames from `multipart` forms directly with `PathBuf::join`. In Rust, if the right side of `PathBuf::join` is an absolute path, it entirely replaces the base path.
+Systemic Cause: The `axum::extract::Multipart` framework does not automatically sanitize `filename`s from uploaded files. Developers assumed that `PathBuf::join` behaves like standard string concatenation with path separators, unaware of the absolute path override behavior.
+Auditor Note: In future Rust codebases, always search for `.join(` and trace the argument back to its source. If it originates from an external input like `multipart` or an API parameter, flag it immediately unless explicit sanitization (like extracting the file name component only) is present.
