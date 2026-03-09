@@ -1,0 +1,4 @@
+## 2024-05-18 - Unsanitized Multipart Filename Leads to Arbitrary File Write
+Vulnerability Pattern: Unsanitized input from multipart form data is directly used in file system operations (`PathBuf::join`).
+Systemic Cause: The developer assumed that the `axum::extract::Multipart` library automatically sanitizes filenames or only trusted users would upload files. Authentication relies on a weak default key (`AETHER_UPLOAD_KEY`).
+Auditor Note: Always check how filenames from file uploads are constructed before writing them to the disk. Rust's `PathBuf::join` will overwrite the base path if the appended path is absolute. Look for `field.file_name()` followed by `std::path::PathBuf::join` and `tokio::fs::write` without explicit sanitization steps.
