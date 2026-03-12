@@ -1,0 +1,4 @@
+## 2024-05-18 - 🛡️ CRITICAL Arbitrary File Write: Unsanitized filename in Aether Upload
+Vulnerability Pattern: Unsanitized filename from `axum::extract::Multipart` is directly joined to a base path `version_dir.join(&filename)` in `upload_handler` (`syscore/src/server/aether.rs`), allowing an attacker to write files anywhere on the filesystem if the filename contains `../` or an absolute path.
+Systemic Cause: Lack of defense-in-depth and implicit trust in the `filename` field of multipart uploads. The code sanitizes the `version` field but ignores the `filename`. Also, an insecure default key is used for authentication, allowing this endpoint to be reached without valid credentials.
+Auditor Note: Always check `std::path::PathBuf::join` operations involving user-controlled input. In Rust, joining an absolute path to a PathBuf completely replaces the existing base path. Look for similar multipart processing in other handlers.
