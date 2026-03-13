@@ -1,0 +1,4 @@
+## 2026-03-13 - Arbitrary File Write via Unsanitized Multipart Filename
+Vulnerability Pattern: Unsanitized user-provided filenames from multipart forms are passed directly to `std::path::PathBuf::join()`. In Rust, if the appended path is absolute, it completely replaces the base path, leading to an Arbitrary File Write outside the intended directory.
+Systemic Cause: The developers relied on `axum::extract::Multipart` for handling file uploads but assumed that `field.file_name()` would provide a safe, sanitized filename. They checked the `version` field for path traversal characters (`..`, `/`, `\`), but completely missed validating the `filename` field.
+Auditor Note: Always check how filenames extracted from multipart forms are used in file system operations. Specifically, look for `PathBuf::join` usage with untrusted input in Rust codebases, as it's a known pitfall that absolute paths overwrite the base path.
