@@ -1,8 +1,9 @@
 use axum::{Json, extract::State};
 use serde::{Deserialize, Serialize};
-use crate::docker::manager::{ContainerManager, Language};
+use crate::docker::manager::{ContainerManagerTrait, Language};
 use crate::simulation::{SimulationState, next_tick};
 use crate::vm::{VMState, VMMallocRequest, VMWriteRequest, FSOperationRequest, FSOperationResponse};
+use std::sync::Arc;
 use super::aether; // Import local module from parent server module if needed, or crate::server::aether
 
 #[derive(Deserialize)]
@@ -18,7 +19,7 @@ pub struct ExecuteResponse {
 }
 
 pub async fn execute_handler(
-    State(manager): State<ContainerManager>,
+    State(manager): State<Arc<dyn ContainerManagerTrait>>,
     Json(payload): Json<ExecuteRequest>,
 ) -> Json<ExecuteResponse> {
     let lang = match payload.language.as_str() {

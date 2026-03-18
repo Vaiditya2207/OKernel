@@ -3,16 +3,17 @@ use axum::{
     response::IntoResponse,
 };
 use futures::{sink::SinkExt, stream::StreamExt};
-use crate::docker::manager::ContainerManager;
+use crate::docker::manager::ContainerManagerTrait;
+use std::sync::Arc;
 
 pub async fn websocket_handler(
     ws: WebSocketUpgrade,
-    State(manager): State<ContainerManager>,
+    State(manager): State<Arc<dyn ContainerManagerTrait>>,
 ) -> impl IntoResponse {
     ws.on_upgrade(|socket| handle_socket(socket, manager))
 }
 
-async fn handle_socket(socket: WebSocket, manager: ContainerManager) {
+async fn handle_socket(socket: WebSocket, manager: Arc<dyn ContainerManagerTrait>) {
     let (mut sender, mut receiver) = socket.split();
 
     // In a real implementation we would:
@@ -39,8 +40,12 @@ async fn handle_socket(socket: WebSocket, manager: ContainerManager) {
                                 log_result = rx.recv() => {
                                     let log: String = match log_result {
                                         Ok(content) => content,
-                                        Err(e) => {
-                                            tracing::warn!("Broadcast lag or closed: {}", e);
+                                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
+                                            tracing::warn!("Broadcast lagged, continuing...");
+                                            continue;
+                                        }
+                                        Err(_) => {
+                                            tracing::warn!("Broadcast closed");
                                             break;
                                         }
                                     };

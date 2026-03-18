@@ -8,6 +8,7 @@ edition = "2021"
 axum = { version = "0.7", features = ["ws", "multipart"] }
 tokio = { version = "1.0", features = ["full"] }
 tower-http = { version = "0.5", features = ["trace", "cors"] }
+async-trait = "0.1"
 
 # Docker SDK
 bollard = "0.15"
@@ -39,3 +40,6 @@ dotenv = "0.15"
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 tokio-util = { version = "0.7", features = ["io"] }
 chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+axum-test = "14.4.0"
