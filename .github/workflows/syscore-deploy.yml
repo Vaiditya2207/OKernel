@@ -97,7 +97,7 @@ jobs:
           target: "/tmp/"
 
       - name: Activate and Restart (SSH)
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.2.5
         with:
           host: ${{ secrets.GCP_VM_IP }}
           username: ${{ secrets.GCP_SSH_USER }}
