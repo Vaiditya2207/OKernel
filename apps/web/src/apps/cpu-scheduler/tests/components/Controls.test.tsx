@@ -38,7 +38,7 @@ describe('Controls Component', () => {
     expect(screen.getByText('[ EXEC ]')).toBeInTheDocument();
     expect(screen.getByTitle('Reset Simulation')).toBeInTheDocument();
     expect(screen.getByText('ALGO:')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('First Come First Serve')).toBeInTheDocument();
+    expect(screen.getByText('First Come First Serve')).toBeInTheDocument();
     expect(screen.getByText('T=')).toBeInTheDocument();
     expect(screen.getByText('0ms')).toBeInTheDocument();
   });
@@ -66,8 +66,12 @@ describe('Controls Component', () => {
 
   it('changes algorithm when selected', () => {
     render(<Controls state={mockState} setState={mockSetState} onReset={mockOnReset} />);
-    const select = screen.getByRole('combobox');
-    fireEvent.change(select, { target: { value: 'SJF' } });
+    const trigger = screen.getByText('FCFS').closest('button');
+    if (!trigger) throw new Error("Dropdown trigger not found");
+    fireEvent.click(trigger);
+    
+    const sjfOption = screen.getByText('Shortest Job First');
+    fireEvent.click(sjfOption.closest('button')!);
     expect(mockSetState).toHaveBeenCalled();
   });
 

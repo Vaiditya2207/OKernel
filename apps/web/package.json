@@ -10,6 +10,7 @@
     "fix:lint": "eslint . --fix",
     "test": "vitest",
     "test:ui": "vitest --ui",
+    "test:e2e": "playwright test",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -51,7 +52,8 @@
     "typescript": "~5.7.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^5.4.0",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "@playwright/test": "1.58.2"
   },
   "overrides": {
     "minimatch": "^10.0.0",
