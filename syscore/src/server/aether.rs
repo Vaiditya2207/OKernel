@@ -18,6 +18,8 @@ const STORAGE_DIR: &str = "storage/aether";
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct AetherVersion {
     pub version: String,
+    #[serde(default = "default_channel")]
+    pub channel: String, // "stable" | "beta" | "dev"
     pub description: String,
     pub changelog: String,
     pub release_date: String,
@@ -27,16 +29,28 @@ pub struct AetherVersion {
     pub bundle_filename: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bundle_size: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub patch_filename: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub patch_size: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub patch_from_version: Option<String>,
+}
+
+fn default_channel() -> String {
+    "stable".to_string()
 }
 
 #[derive(Deserialize)]
 pub struct DownloadQuery {
     pub v: Option<String>,
+    pub channel: Option<String>,
 }
 
-pub async fn list_handlers() -> impl IntoResponse {
+pub async fn list_handlers(Query(params): Query<DownloadQuery>) -> impl IntoResponse {
     let mut versions = Vec::new();
     let storage_path = PathBuf::from(STORAGE_DIR);
+    let target_channel = params.channel.unwrap_or_else(|| "stable".to_string());
 
     if let Ok(entries) = fs::read_dir(&storage_path) {
         for entry in entries.flatten() {
@@ -46,7 +60,9 @@ pub async fn list_handlers() -> impl IntoResponse {
                     if metadata_path.exists() {
                         if let Ok(content) = fs::read_to_string(&metadata_path) {
                             if let Ok(version_data) = serde_json::from_str::<AetherVersion>(&content) {
-                                versions.push(version_data);
+                                if version_data.channel == target_channel {
+                                    versions.push(version_data);
+                                }
                             }
                         }
                     }
@@ -55,15 +71,16 @@ pub async fn list_handlers() -> impl IntoResponse {
         }
     }
 
-    // Sort versions by release date (descending) - simple string sort for now, ideally parse dates
+    // Sort versions by release date (descending)
     versions.sort_by(|a, b| b.release_date.cmp(&a.release_date));
 
     Json(versions)
 }
 
-pub async fn latest_handler() -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+pub async fn latest_handler(Query(params): Query<DownloadQuery>) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let mut versions = Vec::new();
     let storage_path = PathBuf::from(STORAGE_DIR);
+    let target_channel = params.channel.unwrap_or_else(|| "stable".to_string());
 
     if let Ok(entries) = fs::read_dir(&storage_path) {
         for entry in entries.flatten() {
@@ -73,7 +90,9 @@ pub async fn latest_handler() -> Result<impl IntoResponse, (StatusCode, Json<ser
                     if metadata_path.exists() {
                         if let Ok(content) = fs::read_to_string(&metadata_path) {
                             if let Ok(version_data) = serde_json::from_str::<AetherVersion>(&content) {
-                                versions.push(version_data);
+                                if version_data.channel == target_channel {
+                                    versions.push(version_data);
+                                }
                             }
                         }
                     }
@@ -83,7 +102,7 @@ pub async fn latest_handler() -> Result<impl IntoResponse, (StatusCode, Json<ser
     }
 
     if versions.is_empty() {
-        return Err((StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "No versions available"}))));
+        return Err((StatusCode::NOT_FOUND, Json(serde_json::json!({"error": format!("No versions available for channel '{}'", target_channel)}))));
     }
 
     versions.sort_by(|a, b| b.release_date.cmp(&a.release_date));
@@ -220,6 +239,66 @@ pub async fn bundle_download_handler(Query(params): Query<DownloadQuery>) -> Res
     Ok((headers, body))
 }
 
+pub async fn patch_download_handler(Query(params): Query<DownloadQuery>) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let version_str = params.v.unwrap_or_else(|| "latest".to_string());
+    let target_channel = params.channel.unwrap_or_else(|| "stable".to_string());
+    
+    // 1. Resolve version
+    let target_version = if version_str == "latest" {
+        let mut version_objs = Vec::new();
+        let storage_path = PathBuf::from(STORAGE_DIR);
+        if let Ok(entries) = fs::read_dir(&storage_path) {
+            for entry in entries.flatten() {
+                 let metadata_path = entry.path().join("metadata.json");
+                 if let Ok(content) = fs::read_to_string(&metadata_path) {
+                     if let Ok(v) = serde_json::from_str::<AetherVersion>(&content) {
+                         if v.channel == target_channel {
+                            version_objs.push(v);
+                         }
+                     }
+                 }
+            }
+        }
+        version_objs.sort_by(|a, b| b.release_date.cmp(&a.release_date));
+        
+        if let Some(latest) = version_objs.first() {
+            latest.version.clone()
+        } else {
+            return Err((StatusCode::NOT_FOUND, format!("No versions available for channel '{}'", target_channel)));
+        }
+    } else {
+        version_str
+    };
+
+    // 2. Sanitize
+    if target_version.contains("..") || target_version.contains("/") || target_version.contains("\\") {
+         return Err((StatusCode::BAD_REQUEST, "Invalid version format".to_string()));
+    }
+
+    // 3. Find metadata and patch
+    let version_dir = PathBuf::from(STORAGE_DIR).join(&target_version);
+    let metadata_path = version_dir.join("metadata.json");
+    let metadata_content = fs::read_to_string(&metadata_path).map_err(|_| (StatusCode::NOT_FOUND, format!("Version {} not found", target_version)))?;
+    let metadata: AetherVersion = serde_json::from_str(&metadata_content).map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Invalid metadata".to_string()))?;
+
+    let patch_filename = metadata.patch_filename.ok_or((StatusCode::NOT_FOUND, format!("No patch available for version {}", target_version)))?;
+    let file_path = version_dir.join(&patch_filename);
+    
+    // 4. Stream file
+    let file = tokio_fs::File::open(&file_path).await.map_err(|_| (StatusCode::NOT_FOUND, "Patch file not found".to_string()))?;
+    let stream = tokio_util::io::ReaderStream::new(file);
+    let body = Body::from_stream(stream);
+
+    let mut headers = HeaderMap::new();
+    headers.insert(axum::http::header::CONTENT_TYPE, "application/octet-stream".parse().unwrap());
+    headers.insert(
+        axum::http::header::CONTENT_DISPOSITION,
+        format!("attachment; filename=\"{}\"", patch_filename).parse().unwrap()
+    );
+
+    Ok((headers, body))
+}
+
 pub async fn upload_handler(
     headers: HeaderMap,
     mut multipart: Multipart,
@@ -237,12 +316,16 @@ pub async fn upload_handler(
 
     // 2. Parse Multipart
     let mut version: Option<String> = None;
+    let mut channel: Option<String> = None;
     let mut description: Option<String> = None;
     let mut changelog: Option<String> = None;
     let mut file_bytes: Option<Vec<u8>> = None;
     let mut filename: Option<String> = None;
     let mut bundle_bytes: Option<Vec<u8>> = None;
     let mut bundle_filename: Option<String> = None;
+    let mut patch_bytes: Option<Vec<u8>> = None;
+    let mut patch_filename: Option<String> = None;
+    let mut patch_from_version: Option<String> = None;
 
     while let Some(field) = multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
         let name = field.name().unwrap_or("").to_string();
@@ -255,18 +338,25 @@ pub async fn upload_handler(
             bundle_filename = field.file_name().map(|s| s.to_string());
             let data = field.bytes().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             bundle_bytes = Some(data.to_vec());
+        } else if name == "patch" {
+            patch_filename = field.file_name().map(|s| s.to_string());
+            let data = field.bytes().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            patch_bytes = Some(data.to_vec());
         } else {
             let data = field.text().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
             match name.as_str() {
                 "version" => version = Some(data),
+                "channel" => channel = Some(data),
                 "description" => description = Some(data),
                 "changelog" => changelog = Some(data),
+                "patch_from" => patch_from_version = Some(data),
                 _ => {}
             }
         }
     }
 
     let version = version.ok_or((StatusCode::BAD_REQUEST, "Missing version".to_string()))?;
+    let channel = channel.unwrap_or_else(|| "stable".to_string());
     let file_bytes = file_bytes.ok_or((StatusCode::BAD_REQUEST, "Missing file (dmg)".to_string()))?;
     let filename = filename.ok_or((StatusCode::BAD_REQUEST, "Missing filename (dmg)".to_string()))?;
     let description = description.unwrap_or_default();
@@ -295,8 +385,15 @@ pub async fn upload_handler(
         tokio_fs::write(&bundle_path, b_bytes).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
 
+    // Save Patch (optional)
+    if let (Some(p_bytes), Some(p_name)) = (&patch_bytes, &patch_filename) {
+        let patch_path = version_dir.join(p_name);
+        tokio_fs::write(&patch_path, p_bytes).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
     let metadata = AetherVersion {
         version: version.clone(),
+        channel,
         description,
         changelog,
         release_date: chrono::Utc::now().to_rfc3339(),
@@ -304,6 +401,9 @@ pub async fn upload_handler(
         size: file_bytes.len() as u64,
         bundle_filename: bundle_filename.clone(),
         bundle_size: bundle_bytes.as_ref().map(|b| b.len() as u64),
+        patch_filename: patch_filename.clone(),
+        patch_size: patch_bytes.as_ref().map(|b| b.len() as u64),
+        patch_from_version,
     };
 
     let metadata_path = version_dir.join("metadata.json");

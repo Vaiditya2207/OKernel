@@ -27,6 +27,9 @@ struct AetherApp: App {
     @State private var updateLetterVersion = ""
     @State private var updateLetterChangelog = ""
     
+    // Phase 8: Rollback Status
+    @State private var showRollbackToast = false
+    
     var body: some Scene {
         WindowGroup("Aether") {
             ZStack(alignment: .top) {
@@ -164,6 +167,25 @@ struct AetherApp: App {
                     .zIndex(103)
                     .transition(.opacity)
                 }
+                
+                // Rollback Notification (Phase 8)
+                if showRollbackToast {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            UpdateStatusToast(
+                                message: "REVERTED TO BACKUP",
+                                submessage: "CRASH LOOP DETECTED",
+                                icon: "arrow.uturn.backward.circle.fill",
+                                color: .orange
+                            )
+                        }
+                    }
+                    .padding()
+                    .zIndex(104)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
             .background(Color.clear) // Ensure window background doesn't bleed if possible
             .onAppear {
@@ -176,6 +198,9 @@ struct AetherApp: App {
                 
                 // Trigger async session loading — does NOT block main thread
                 SessionManager.shared.loadAsync()
+                
+                // Phase 8: Crash loop check
+                checkCrashLoop()
                 
                 // Update management
                 updateManager.schedulePeriodicCheck()
@@ -350,6 +375,84 @@ struct AetherApp: App {
             
             // Cleanup update artifacts
             cleanupUpdateArtifacts()
+        }
+    }
+    
+    // MARK: - Phase 8: Rollback Logic
+    
+    private func checkCrashLoop() {
+        let now = Date().timeIntervalSince1970
+        var launches = UserDefaults.standard.array(forKey: "recentLaunchTimestamps") as? [Double] ?? []
+        
+        // Add current launch
+        launches.insert(now, at: 0)
+        launches = Array(launches.prefix(5))
+        UserDefaults.standard.set(launches, forKey: "recentLaunchTimestamps")
+        
+        // Detect if previously rolled back
+        if UserDefaults.standard.bool(forKey: "didAutoRollback") {
+            UserDefaults.standard.removeObject(forKey: "didAutoRollback")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                withAnimation {
+                    self.showRollbackToast = true
+                }
+                // Auto-hide after 5s
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5.0) {
+                    withAnimation { self.showRollbackToast = false }
+                }
+            }
+            return
+        }
+        
+        // Threshold: 3 launches within 60 seconds
+        if launches.count >= 3 {
+            let earliest = launches[2]
+            if now - earliest < 60 {
+                print("[AetherApp] Crash loop detected! Attempting rollback...")
+                performEmergencyRollback()
+            }
+        }
+    }
+    
+    private func performEmergencyRollback() {
+        let fileManager = FileManager.default
+        let bundleURL = Bundle.main.bundleURL
+        let contentsURL = bundleURL.appendingPathComponent("Contents")
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let backupDir = appSupport.appendingPathComponent("Aether/backup")
+        let backupContents = backupDir.appendingPathComponent("Contents")
+        
+        guard fileManager.fileExists(atPath: backupContents.path) else {
+            print("[AetherApp] Rollback failed: No backup found.")
+            return
+        }
+        
+        do {
+            // 1. Remove corrupted Contents
+            try? fileManager.removeItem(at: contentsURL)
+            // 2. Restore from backup
+            try fileManager.copyItem(at: backupContents, to: contentsURL)
+            // 3. Re-sign
+            let signProcess = Process()
+            signProcess.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+            signProcess.arguments = ["--force", "--deep", "--sign", "-", bundleURL.path]
+            try signProcess.run()
+            signProcess.waitUntilExit()
+            
+            // 4. Mark status and restart
+            UserDefaults.standard.set(true, forKey: "didAutoRollback")
+            UserDefaults.standard.removeObject(forKey: "recentLaunchTimestamps")
+            
+            print("[AetherApp] Rollback successful. Restarting...")
+            
+            // Emergency restart
+            let config = NSWorkspace.OpenConfiguration()
+            NSWorkspace.shared.openApplication(at: bundleURL, configuration: config) { _, _ in
+                exit(0)
+            }
+            
+        } catch {
+            print("[AetherApp] Emergency rollback failed: \(error)")
         }
     }
     
@@ -575,5 +678,46 @@ class DraggableNSView: NSView {
         } else {
             super.mouseDown(with: event)
         }
+    }
+}
+
+struct UpdateStatusToast: View {
+    let message: String
+    let submessage: String
+    let icon: String
+    let color: Color
+    @ObservedObject var config = ConfigManager.shared
+    
+    var body: some View {
+        let theme = config.config.colors.resolveTheme()
+        let bgColor = Color(hex: theme.background).opacity(0.8)
+        let fgColor = Color(hex: theme.foreground)
+
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 20))
+                .foregroundColor(color)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(message)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(fgColor)
+                
+                Text(submessage)
+                    .font(.system(size: 8, weight: .medium, design: .monospaced))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(bgColor)
+                .shadow(color: Color.black.opacity(0.3), radius: 6, x: 0, y: 3)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(color.opacity(0.4), lineWidth: 0.5)
+        )
     }
 }
