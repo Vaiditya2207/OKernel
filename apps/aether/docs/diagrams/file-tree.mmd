@@ -1,0 +1,48 @@
+graph TD
+    subgraph UserFS ["User Filesystem"]
+        direction TB
+        CFG["~/.config/aether/"]
+        CFG --> CJ["config.json"]
+        CFG --> CT["config.toml"]
+
+        LIB["~/Library/Application Support/Aether/"]
+        LIB --> SESS["sessions.plist"]
+        LIB --> UPD["updates/"]
+        UPD --> VER["v0.4.0/"]
+        VER --> TGZ["Aether-bundle-v0.4.0.tar.gz"]
+        LIB --> BKP["backup/"]
+        BKP --> BCON["Contents/ (pre-update copy)"]
+    end
+
+    subgraph AppBundle ["Aether.app Bundle"]
+        direction TB
+        APPB["/Applications/Aether.app/"]
+        APPB --> CON["Contents/"]
+        CON --> MACOS["MacOS/AetherApp"]
+        CON --> FW["Frameworks/"]
+        CON --> RES["Resources/"]
+        RES --> LOGO["logo.png"]
+        RES --> ICON["AppIcon.icns"]
+        CON --> INFO["Info.plist"]
+    end
+
+    subgraph ServerFS ["SysCore Storage"]
+        direction TB
+        STOR["storage/aether/"]
+        STOR --> V03["v0.3.0/"]
+        V03 --> M03["metadata.json"]
+        V03 --> D03["Aether_Installer.dmg"]
+        V03 --> B03["Aether-bundle-v0.3.0.tar.gz"]
+        STOR --> V04["v0.4.0/"]
+        V04 --> M04["metadata.json"]
+        V04 --> D04["Aether_Installer.dmg"]
+        V04 --> B04["Aether-bundle-v0.4.0.tar.gz"]
+    end
+
+    TGZ -.->|"extract on update"| CON
+    CON -.->|"backup before update"| BCON
+    CJ -.->|"update.enabled"| UPD
+
+    style UserFS fill:#1a202c,stroke:#b794f4,color:#e2e8f0
+    style AppBundle fill:#1a202c,stroke:#63b3ed,color:#e2e8f0
+    style ServerFS fill:#1a202c,stroke:#68d391,color:#e2e8f0

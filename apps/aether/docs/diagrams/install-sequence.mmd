@@ -1,0 +1,48 @@
+sequenceDiagram
+    actor User
+    participant Badge as UpdateBadgeView
+    participant Modal as UpdateModalView
+    participant UM as UpdateManager
+    participant Server as SysCore API
+    participant FS as Filesystem
+    participant App as Aether.app
+
+    Note over UM: App Launch (update.enabled = true)
+    UM->>UM: Wait 5 seconds
+    UM->>Server: GET /api/v1/aether/latest
+    Server-->>UM: {version: "v0.4.0", changelog: "..."}
+    UM->>UM: Compare v0.4.0 > v0.3.0 (local)
+    UM->>Badge: State = .available("v0.4.0")
+    Badge->>Badge: Fade in pill button
+
+    User->>Badge: Clicks "Update v0.4.0"
+    Badge->>Modal: Present modal
+    Modal->>UM: downloadUpdate()
+    UM->>Server: GET /api/v1/aether/download/bundle?v=v0.4.0
+    loop Progress Updates
+        Server-->>UM: Streamed chunks
+        UM-->>Modal: Progress 0% → 100%
+    end
+    UM->>FS: Save to ~/Library/.../updates/v0.4.0/
+    UM->>UM: Verify file size
+    UM-->>Modal: State = .readyToInstall
+
+    alt User clicks "Restart & Update"
+        User->>Modal: Clicks "Restart & Update"
+        Modal->>UM: applyUpdate()
+        UM->>FS: Backup .app/Contents/ → backup/
+        UM->>FS: tar -xzf bundle.tar.gz → .app/
+        UM->>FS: codesign --force --deep --sign - .app
+        UM->>FS: Set pendingUpdateVersion in UserDefaults
+        UM->>FS: Clean up download artifacts
+        UM->>App: NSWorkspace.open(Bundle.main.bundleURL)
+        UM->>App: NSApp.terminate(nil)
+        Note over App: New instance launches
+        App->>App: Detect pendingUpdateVersion
+        App->>User: Show Logo → "What's New" screen
+        App->>App: Clear pendingUpdateVersion
+    else User clicks "Later"
+        User->>Modal: Clicks "Later"
+        Modal->>Badge: Change to "Restart to Update"
+        Note over Badge: Persists until restart
+    end

@@ -1,0 +1,25 @@
+stateDiagram-v2
+    [*] --> Idle: App Launch\n(update.enabled = true)
+    [*] --> Disabled: App Launch\n(update.enabled = false)
+
+    Idle --> Checking: Timer fires /\nManual check
+    Checking --> Available: Remote > Local
+    Checking --> Idle: Remote <= Local /\nNetwork error
+    Available --> Downloading: User clicks\n"Update" badge
+    Downloading --> ReadyToInstall: Download complete
+    Downloading --> Failed: Network error /\nDisk full
+    Downloading --> Idle: User cancels
+    ReadyToInstall --> Installing: User clicks\n"Restart & Update"
+    ReadyToInstall --> RestartPending: User clicks\n"Later"
+    Installing --> RestartRequired: Bundle replaced\n+ re-signed
+    Installing --> Failed: Extraction error /\nSign error
+    Failed --> Checking: User retries
+    Failed --> Idle: User dismisses
+    RestartPending --> Installing: User clicks\n"Restart to Update"
+    RestartRequired --> [*]: App restarts →\nPost-update flow
+
+    Disabled --> Idle: Config changed\nto enabled
+
+    note right of Available: Title bar badge\nbecomes visible
+    note right of RestartPending: Badge changes to\n"Restart to Update"
+    note left of Disabled: No UI shown\nNo network calls

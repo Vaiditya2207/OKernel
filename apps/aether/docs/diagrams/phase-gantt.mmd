@@ -1,0 +1,41 @@
+gantt
+    title Implementation Phases
+    dateFormat YYYY-MM-DD
+    axisFormat %b %d
+
+    section Phase 1: Foundation
+    GET /api/v1/aether/latest endpoint      :p1a, 2026-03-20, 1d
+    UpdateConfig struct in ConfigManager     :p1b, 2026-03-20, 1d
+    Update config examples (JSON + TOML)     :p1c, after p1b, 0.5d
+
+    section Phase 2: Update Check
+    Create UpdateManager singleton           :p2a, after p1a, 2d
+    Semver comparison logic                  :p2b, after p1a, 0.5d
+    Periodic check timer                     :p2c, after p2a, 0.5d
+    Wire into AetherApp.swift                :p2d, after p2c, 0.5d
+
+    section Phase 3: Title Bar Badge
+    Create UpdateBadgeView                   :p3a, after p2d, 1d
+    Integrate into title bar ZStack          :p3b, after p3a, 0.5d
+
+    section Phase 4: Download + Modal
+    Create UpdateModalView                   :p4a, after p3b, 2d
+    Download with progress delegate          :p4b, after p3b, 1.5d
+    Wire modal to badge + state              :p4c, after p4a, 0.5d
+
+    section Phase 5: Install + Restart
+    Backup + extract + re-sign logic         :p5a, after p4c, 2d
+    Restart mechanism                        :p5b, after p5a, 1d
+    CI/CD tarball generation                 :p5c, after p4c, 1d
+    Bundle download endpoint                 :p5d, after p5c, 0.5d
+
+    section Phase 6: Post-Update UX
+    UpdateLetterView                         :p6a, after p5b, 1.5d
+    pendingUpdateVersion check on launch     :p6b, after p6a, 0.5d
+
+    section Phase 7: Polish + Tests
+    Disk space check + SHA-256 verify        :p7a, after p6b, 1d
+    Rollback on failure                      :p7b, after p6b, 1d
+    Unit tests                               :p7c, after p6b, 2d
+    Integration tests                        :p7d, after p7c, 2d
+    E2E tests                                :p7e, after p7d, 2d

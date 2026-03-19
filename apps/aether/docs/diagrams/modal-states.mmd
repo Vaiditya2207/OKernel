@@ -1,0 +1,42 @@
+flowchart LR
+    subgraph Checking
+        C1[Spinner]
+        C2["Checking for updates..."]
+    end
+
+    subgraph Downloading
+        D1["Progress Bar 64%"]
+        D2["16.2 MB / 25.1 MB"]
+        D3["[Cancel]"]
+    end
+
+    subgraph Ready ["Ready to Install"]
+        R1["Download complete!"]
+        R2["[Restart & Update]"]
+        R3["[Later]"]
+    end
+
+    subgraph Installing
+        I1[Spinner]
+        I2["Applying update..."]
+        I3["Do not quit Aether"]
+    end
+
+    subgraph Failed
+        F1["Error message"]
+        F2["[Retry]  [Dismiss]"]
+    end
+
+    Checking -->|"version found"| Downloading
+    Downloading -->|"100%"| Ready
+    Downloading -->|"error"| Failed
+    Ready -->|"Restart"| Installing
+    Failed -->|"Retry"| Downloading
+    Installing -->|"success"| FIN([App Restarts])
+
+    style Checking fill:#2d3748,stroke:#63b3ed,color:#e2e8f0
+    style Downloading fill:#2d3748,stroke:#d69e2e,color:#e2e8f0
+    style Ready fill:#2d3748,stroke:#68d391,color:#e2e8f0
+    style Installing fill:#2d3748,stroke:#b794f4,color:#e2e8f0
+    style Failed fill:#2d3748,stroke:#fc8181,color:#e2e8f0
+    style FIN fill:#1a202c,stroke:#68d391,color:#e2e8f0

@@ -1,0 +1,57 @@
+graph LR
+    subgraph Client ["Aether.app (macOS)"]
+        CM[ConfigManager]
+        UM[UpdateManager]
+        UB[UpdateBadgeView]
+        UMV[UpdateModalView]
+        ULV[UpdateLetterView]
+        SV[StartupView]
+
+        CM -->|update.enabled| UM
+        UM -->|state changes| UB
+        UB -->|tap| UMV
+        UM -->|restartRequired| UMV
+        UM -->|pendingUpdateVersion| ULV
+        ULV -.->|extends| SV
+    end
+
+    subgraph Server ["SysCore (Rust/Axum)"]
+        LH["GET /api/v1/aether/latest"]
+        BD["GET /api/v1/aether/download/bundle"]
+        UH["POST /api/v1/aether"]
+        ST[("storage/aether/{ver}/")]
+        LH --> ST
+        BD --> ST
+        UH --> ST
+    end
+
+    subgraph CI ["GitHub Actions"]
+        BLD[Build Aether]
+        TAR[Create bundle.tar.gz]
+        DMG[Create Installer.dmg]
+        PUB[POST to SysCore]
+        BLD --> TAR
+        BLD --> DMG
+        TAR --> PUB
+        DMG --> PUB
+    end
+
+    subgraph FS ["User Filesystem"]
+        CFG["~/.config/aether/config.json"]
+        DL["~/Library/App Support/Aether/updates/"]
+        BK["~/Library/App Support/Aether/backup/"]
+        APP["/Applications/Aether.app"]
+    end
+
+    UM -->|"1. Check"| LH
+    UM -->|"2. Download"| BD
+    UM -->|"3. Extract"| APP
+    UM -->|"3a. Backup"| BK
+    BD -->|stream .tar.gz| DL
+    CM -->|reads| CFG
+    PUB -->|upload| UH
+
+    style Client fill:#1a202c,stroke:#63b3ed,color:#e2e8f0
+    style Server fill:#1a202c,stroke:#68d391,color:#e2e8f0
+    style CI fill:#1a202c,stroke:#d69e2e,color:#e2e8f0
+    style FS fill:#1a202c,stroke:#b794f4,color:#e2e8f0
