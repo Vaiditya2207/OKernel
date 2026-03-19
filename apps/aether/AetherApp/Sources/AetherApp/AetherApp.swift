@@ -22,6 +22,11 @@ struct AetherApp: App {
     // Leader Key State
     @State private var isWindowMode = false
     
+    // Post-Update Letter
+    @State private var showUpdateLetter = false
+    @State private var updateLetterVersion = ""
+    @State private var updateLetterChangelog = ""
+    
     var body: some Scene {
         WindowGroup("Aether") {
             ZStack(alignment: .top) {
@@ -148,6 +153,17 @@ struct AetherApp: App {
                         .zIndex(102)
                         .transition(.opacity.combined(with: .scale(scale: 0.95)))
                 }
+                
+                // Update Letter Overlay (Phase 6)
+                if showUpdateLetter {
+                    UpdateLetterView(version: updateLetterVersion, changelog: updateLetterChangelog) {
+                        withAnimation {
+                            showUpdateLetter = false
+                        }
+                    }
+                    .zIndex(103)
+                    .transition(.opacity)
+                }
             }
             .background(Color.clear) // Ensure window background doesn't bleed if possible
             .onAppear {
@@ -163,6 +179,9 @@ struct AetherApp: App {
                 
                 // Update management
                 updateManager.schedulePeriodicCheck()
+                
+                // Post-update check
+                checkPostUpdate()
             }
             .onReceive(SessionManager.shared.$isLoaded) { loaded in
                 guard loaded else { return }
@@ -309,6 +328,41 @@ struct AetherApp: App {
             restoreTimer?.invalidate()
             interactionCancellable?.cancel()
         }
+    }
+    
+    // MARK: - Update Management
+    
+    private func checkPostUpdate() {
+        if let version = UserDefaults.standard.string(forKey: "pendingUpdateVersion") {
+            print("[AetherApp] Detected post-update launch for version \(version)")
+            updateLetterVersion = version
+            updateLetterChangelog = UserDefaults.standard.string(forKey: "pendingUpdateChangelog") ?? "Bug fixes and improvements."
+            
+            // Clear keys
+            UserDefaults.standard.removeObject(forKey: "pendingUpdateVersion")
+            UserDefaults.standard.removeObject(forKey: "pendingUpdateChangelog")
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                withAnimation {
+                    self.showUpdateLetter = true
+                }
+            }
+            
+            // Cleanup update artifacts
+            cleanupUpdateArtifacts()
+        }
+    }
+    
+    private func cleanupUpdateArtifacts() {
+        let fileManager = FileManager.default
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let aetherDir = appSupport.appendingPathComponent("Aether")
+        let updatesDir = aetherDir.appendingPathComponent("updates")
+        let backupDir = aetherDir.appendingPathComponent("backup")
+        
+        try? fileManager.removeItem(at: updatesDir)
+        try? fileManager.removeItem(at: backupDir)
+        print("[AetherApp] Cleaned up update artifacts")
     }
     
     // Returns true if action was handled, false if it should fall through (e.g. to terminal input)
