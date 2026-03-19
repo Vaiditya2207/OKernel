@@ -12,7 +12,8 @@ struct AetherConfig: Codable {
     var behavior: BehaviorConfig
     var session: SessionConfig = SessionConfig()
     var terminal: TerminalConfig = TerminalConfig()
-    
+    var update: UpdateConfig = UpdateConfig()
+
     // Default Configuration
     static let `default` = AetherConfig(
         window: WindowConfig(),
@@ -23,10 +24,11 @@ struct AetherConfig: Codable {
         keys: KeyBindingConfig(),
         behavior: BehaviorConfig(),
         session: SessionConfig(),
-        terminal: TerminalConfig()
+        terminal: TerminalConfig(),
+        update: UpdateConfig()
     )
-    
-    init(window: WindowConfig, ui: UIConfig, font: FontConfig, cursor: CursorConfig, colors: ColorConfig, keys: KeyBindingConfig, behavior: BehaviorConfig, session: SessionConfig, terminal: TerminalConfig) {
+
+    init(window: WindowConfig, ui: UIConfig, font: FontConfig, cursor: CursorConfig, colors: ColorConfig, keys: KeyBindingConfig, behavior: BehaviorConfig, session: SessionConfig, terminal: TerminalConfig, update: UpdateConfig = UpdateConfig()) {
         self.window = window
         self.ui = ui
         self.font = font
@@ -36,8 +38,9 @@ struct AetherConfig: Codable {
         self.behavior = behavior
         self.session = session
         self.terminal = terminal
+        self.update = update
     }
-    
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.window = try container.decodeIfPresent(WindowConfig.self, forKey: .window) ?? WindowConfig()
@@ -49,6 +52,7 @@ struct AetherConfig: Codable {
         self.behavior = try container.decodeIfPresent(BehaviorConfig.self, forKey: .behavior) ?? BehaviorConfig()
         self.session = try container.decodeIfPresent(SessionConfig.self, forKey: .session) ?? SessionConfig()
         self.terminal = try container.decodeIfPresent(TerminalConfig.self, forKey: .terminal) ?? TerminalConfig()
+        self.update = try container.decodeIfPresent(UpdateConfig.self, forKey: .update) ?? UpdateConfig()
     }
 }
 
@@ -454,6 +458,32 @@ struct TerminalConfig: Codable {
     }
 }
 
+// MARK: - Update Settings
+struct UpdateConfig: Codable {
+    var enabled: Bool = true
+    var checkInterval: Int = 3600
+    var serverUrl: String = "https://api.hackmist.tech"
+    var channel: String = "stable"
+
+    enum CodingKeys: String, CodingKey {
+        case enabled
+        case checkInterval = "check_interval"
+        case serverUrl = "server_url"
+        case channel
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
+        let interval = try container.decodeIfPresent(Int.self, forKey: .checkInterval) ?? 3600
+        self.checkInterval = max(300, interval)
+        self.serverUrl = try container.decodeIfPresent(String.self, forKey: .serverUrl) ?? "https://api.hackmist.tech"
+        self.channel = try container.decodeIfPresent(String.self, forKey: .channel) ?? "stable"
+    }
+}
+
 // MARK: - Config Manager
 class ConfigManager: ObservableObject {
     static let shared = ConfigManager()
@@ -614,7 +644,15 @@ class ConfigManager: ObservableObject {
                 cfg.terminal.scrollbackLimit = limit
             }
         }
-        
+
+        // [update]
+        if let update = doc["update"] as? [String: Any] {
+            if let enabled = update["enabled"] as? Bool { cfg.update.enabled = enabled }
+            if let interval = update["check_interval"] as? Int { cfg.update.checkInterval = max(300, interval) }
+            if let serverUrl = update["server_url"] as? String { cfg.update.serverUrl = serverUrl }
+            if let channel = update["channel"] as? String { cfg.update.channel = channel }
+        }
+
         return cfg
     }
     
