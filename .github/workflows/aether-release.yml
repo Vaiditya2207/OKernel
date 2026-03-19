@@ -67,13 +67,15 @@ jobs:
           fi
 
           echo "Publishing version $VERSION..."
-          
+
           # Upload via curl
           echo "Uploading to API..."
-          curl --fail -v -X POST \
+          curl --fail -v --max-time 300 \
             -H "Authorization: Bearer ${{ secrets.AETHER_UPLOAD_KEY }}" \
             -F "file=@$DMG_PATH" \
             -F "version=$VERSION" \
             -F "description=$DESCRIPTION" \
             -F "changelog=$CHANGELOG" \
-            "https://api.hackmist.tech/api/v1/aether"
+            "https://api.hackmist.tech/api/v1/aether" \
+            && echo "Upload successful!" \
+            || echo "Upload failed with exit code $?"
