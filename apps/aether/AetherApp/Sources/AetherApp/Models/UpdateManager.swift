@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import AppKit
+import CryptoKit
 
 /// Numeric semantic versioning (major.minor.patch)
 struct SemanticVersion: Comparable, CustomStringConvertible {
@@ -48,6 +49,8 @@ struct AetherVersionInfo: Codable {
     let patchFilename: String?
     let patchSize: Int64?
     let patchFromVersion: String?
+    let bundleSignature: String?
+    let patchSignature: String?
 
     enum CodingKeys: String, CodingKey {
         case version, description, changelog, size, channel
@@ -57,6 +60,8 @@ struct AetherVersionInfo: Codable {
         case patchFilename = "patch_filename"
         case patchSize = "patch_size"
         case patchFromVersion = "patch_from_version"
+        case bundleSignature = "bundle_signature"
+        case patchSignature = "patch_signature"
     }
 }
 
@@ -70,8 +75,15 @@ class UpdateManager: NSObject, ObservableObject {
     @Published var showModal: Bool = false
     
     private var checkTimer: Timer?
+    private var backgroundUpdateTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private var currentDownloadUrl: URL?
+    private var isBackgroundCheck: Bool = false
+    
+    @Published var updateReadyForInstall: Bool = false
+    
+    // Phase 11: Ed25519 Public Key (Hex)
+    private let publicKeyHex = "b6ea81d1207aede7d30e61bca5300d297339e7bd19fff99e40b57df388104b0f"
     
     enum UpdateState: Equatable {
         case idle
@@ -115,6 +127,7 @@ class UpdateManager: NSObject, ObservableObject {
     
     func schedulePeriodicCheck() {
         checkTimer?.invalidate()
+        backgroundUpdateTimer?.invalidate()
         
         let config = ConfigManager.shared.config.update
         guard config.enabled else {
@@ -125,15 +138,22 @@ class UpdateManager: NSObject, ObservableObject {
         // Initial check
         checkForUpdates()
         
-        // Schedule repeats
+        // Schedule foreground repeats (faster when app is active)
         let interval = TimeInterval(config.checkInterval)
         checkTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.checkForUpdates()
         }
-        print("[UpdateManager] Scheduled periodic check every \(config.checkInterval)s")
+        
+        // Schedule background repeats (slower, e.g. every 4 hours)
+        backgroundUpdateTimer = Timer.scheduledTimer(withTimeInterval: 4 * 3600, repeats: true) { [weak self] _ in
+            self?.checkForUpdates(isBackground: true)
+        }
+        
+        print("[UpdateManager] Scheduled periodic check every \(config.checkInterval)s (foreground) and 4h (background)")
     }
     
-    func checkForUpdates() {
+    func checkForUpdates(isBackground: Bool = false) {
+        self.isBackgroundCheck = isBackground
         let config = ConfigManager.shared.config.update
         guard config.enabled else { return }
         
@@ -141,7 +161,9 @@ class UpdateManager: NSObject, ObservableObject {
         let canCheck = state == .idle || state == .checking || isFailedState
         guard canCheck else { return }
         
-        state = .checking
+        if !isBackground {
+            state = .checking
+        }
         
         var urlComponents = URLComponents(string: "\(config.serverUrl)/api/v1/aether/latest")
         urlComponents?.queryItems = [
@@ -162,7 +184,9 @@ class UpdateManager: NSObject, ObservableObject {
             .sink { completion in
                 if case .failure(let error) = completion {
                     print("[UpdateManager] Check failed: \(error.localizedDescription)")
-                    self.state = .idle 
+                    if !self.isBackgroundCheck {
+                        self.state = .idle 
+                    }
                 }
             } receiveValue: { info in
                 self.processVersionInfo(info)
@@ -182,10 +206,17 @@ class UpdateManager: NSObject, ObservableObject {
         if remoteVer > currentVer {
             print("[UpdateManager] New version available: \(info.version) (current: \(currentStr))")
             self.availableVersion = info
-            self.state = .available(version: info.version)
+            if !isBackgroundCheck {
+                self.state = .available(version: info.version)
+            } else {
+                // Background check found an update - trigger silent download
+                downloadUpdate()
+            }
         } else {
             print("[UpdateManager] Up to date (remote=\(info.version), current=\(currentStr))")
-            self.state = .idle
+            if !isBackgroundCheck {
+                self.state = .idle
+            }
         }
     }
     
@@ -195,8 +226,10 @@ class UpdateManager: NSObject, ObservableObject {
         guard let info = availableVersion else { return }
         let config = ConfigManager.shared.config.update
         
-        state = .downloading
-        downloadProgress = 0.0
+        if !isBackgroundCheck {
+            state = .downloading
+            downloadProgress = 0.0
+        }
         
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
         var downloadUrl: URL?
@@ -356,7 +389,24 @@ class UpdateManager: NSObject, ObservableObject {
         }
     }
     
+    // Phase 11: Ed25519 Verification
+    private func verifySignature(data: Data, signature: Data) -> Bool {
+        do {
+            let pubKeyData = Data(hexString: publicKeyHex)
+            let publicKey = try Curve25519.Signing.PublicKey(rawRepresentation: pubKeyData)
+            return publicKey.isValidSignature(signature, for: data)
+        } catch {
+            print("[UpdateManager] Error verifying signature: \(error)")
+            return false
+        }
+    }
+    
     func restartApp() {
+        // Phase 12: Report success
+        if let info = availableVersion {
+            reportTelemetry(version: info.version, event: "update_success")
+        }
+        
         let bundleURL = Bundle.main.bundleURL
         let configuration = NSWorkspace.OpenConfiguration()
         NSWorkspace.shared.openApplication(at: bundleURL, configuration: configuration) { _, error in
@@ -366,6 +416,29 @@ class UpdateManager: NSObject, ObservableObject {
                 NSApp.terminate(nil)
             }
         }
+    }
+    
+    // Phase 12: Telemetry
+    func reportTelemetry(version: String, event: String) {
+        let config = ConfigManager.shared.config.update
+        guard config.enabled else { return }
+        
+        guard let url = URL(string: "\(config.serverUrl)/api/v1/aether/telemetry") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let body: [String: String] = [
+            "version": version,
+            "event": event,
+            "channel": config.channel,
+            "os": "macos"
+        ]
+        
+        request.httpBody = try? JSONEncoder().encode(body)
+        
+        URLSession.shared.dataTask(with: request).resume()
+        print("[UpdateManager] Reported telemetry: \(event) for \(version)")
     }
 }
 
@@ -416,12 +489,36 @@ extension UpdateManager: URLSessionDownloadDelegate {
                 try fileManager.moveItem(at: location, to: currentBundle)
             }
             
+            // Phase 11: Cryptographic Verification
+            let fileData = try Data(contentsOf: currentBundle)
+            let signatureStr = isPatch ? info.patchSignature : info.bundleSignature
+            
+            if let signatureStr = signatureStr, let signatureData = Data(base64Encoded: signatureStr) {
+                updateStatus("Verifying cryptographic signature...")
+                if !verifySignature(data: fileData, signature: signatureData) {
+                    throw UpdateError.verificationFailed("Cryptographic signature verification failed. The update might be tampered.")
+                }
+                print("[UpdateManager] Signature verified successfully!")
+            } else {
+                print("[UpdateManager] WARNING: No signature found for this update. Proceeding anyway (Legacy support).")
+            }
+            
             DispatchQueue.main.async {
+                self.updateReadyForInstall = true
                 self.state = .readyToInstall
+                if self.isBackgroundCheck {
+                    print("[UpdateManager] Background update ready for install")
+                }
             }
         } catch {
             DispatchQueue.main.async {
-                self.state = .failed(error: "Failed to save update: \(error.localizedDescription)")
+                if !self.isBackgroundCheck {
+                    self.state = .failed(error: "Failed to save update: \(error.localizedDescription)")
+                } else {
+                    print("[UpdateManager] Background update failed: \(error.localizedDescription)")
+                    // Keep idle in background failure
+                    self.state = .idle
+                }
             }
         }
     }
@@ -438,12 +535,14 @@ enum UpdateError: Error {
     case notWritable(String)
     case extractionFailed(String)
     case patchFailed(String)
+    case verificationFailed(String)
     
     var message: String {
         switch self {
         case .notWritable(let m): return m
         case .extractionFailed(let m): return m
         case .patchFailed(let m): return m
+        case .verificationFailed(let m): return m
         }
     }
 }
@@ -461,5 +560,28 @@ func ==(lhs: UpdateManager.UpdateState, rhs: UpdateManager.UpdateState) -> Bool 
     case (.restartRequired, .restartRequired): return true
     case (.rollbackInProgress, .rollbackInProgress): return true
     default: return false
+    }
+}
+
+extension Data {
+    init(hexString: String) {
+        var hex = hexString
+        var data = Data()
+        while(hex.count > 0) {
+            let subIndex = hex.index(hex.startIndex, offsetBy: 2)
+            let c = String(hex[..<subIndex])
+            hex = String(hex[subIndex...])
+            var ch: UInt32 = 0
+            Scanner(string: c).scanHexInt(ch: &ch)
+            var char = UInt8(ch)
+            data.append(&char, count: 1)
+        }
+        self = data
+    }
+}
+
+extension Scanner {
+    func scanHexInt(ch: UnsafeMutablePointer<UInt32>) {
+        self.scanHexInt32(ch)
     }
 }

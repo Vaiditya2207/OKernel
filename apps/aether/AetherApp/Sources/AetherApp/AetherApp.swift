@@ -186,6 +186,28 @@ struct AetherApp: App {
                     .zIndex(104)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
+                
+                // Update Ready Notification (Phase 10)
+                if updateManager.updateReadyForInstall {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            UpdateStatusToast(
+                                message: "UPDATE READY",
+                                submessage: "RESTART TO APPLY",
+                                icon: "arrow.clockwise.circle.fill",
+                                color: .green
+                            )
+                            .onTapGesture {
+                                updateManager.showModal = true
+                            }
+                        }
+                    }
+                    .padding()
+                    .zIndex(105)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
             .background(Color.clear) // Ensure window background doesn't bleed if possible
             .onAppear {
@@ -198,6 +220,10 @@ struct AetherApp: App {
                 
                 // Trigger async session loading — does NOT block main thread
                 SessionManager.shared.loadAsync()
+                
+                // Phase 10: Start background update monitoring
+                UpdateManager.shared.schedulePeriodicCheck()
+                checkPendingUpdateOnStartup()
                 
                 // Phase 8: Crash loop check
                 checkCrashLoop()
@@ -409,6 +435,12 @@ struct AetherApp: App {
             let earliest = launches[2]
             if now - earliest < 60 {
                 print("[AetherApp] Crash loop detected! Attempting rollback...")
+                
+                // Phase 12: Report rollback telemetry
+                if let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
+                    UpdateManager.shared.reportTelemetry(version: currentVersion, event: "rollback")
+                }
+                
                 performEmergencyRollback()
             }
         }
@@ -453,6 +485,31 @@ struct AetherApp: App {
             
         } catch {
             print("[AetherApp] Emergency rollback failed: \(error)")
+        }
+    }
+    
+    private func checkPendingUpdateOnStartup() {
+        let fileManager = FileManager.default
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let updatesDir = appSupport.appendingPathComponent("Aether/updates")
+        
+        guard let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String else { return }
+        
+        do {
+            if fileManager.fileExists(atPath: updatesDir.path) {
+                let contents = try fileManager.contentsOfDirectory(at: updatesDir, includingPropertiesForKeys: nil)
+                for url in contents where url.hasDirectoryPath {
+                    let version = url.lastPathComponent
+                    // If a folder exists that isn't the current version or "current", assume it's a pending update
+                    if version != currentVersion && version != "current" {
+                        print("[AetherApp] Found pending update: \(version)")
+                        UpdateManager.shared.updateReadyForInstall = true
+                        break
+                    }
+                }
+            }
+        } catch {
+            print("[AetherApp] Error checking pending updates: \(error)")
         }
     }
     
