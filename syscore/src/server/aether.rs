@@ -23,6 +23,10 @@ pub struct AetherVersion {
     pub release_date: String,
     pub filename: String,
     pub size: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_filename: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_size: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -55,6 +59,35 @@ pub async fn list_handlers() -> impl IntoResponse {
     versions.sort_by(|a, b| b.release_date.cmp(&a.release_date));
 
     Json(versions)
+}
+
+pub async fn latest_handler() -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let mut versions = Vec::new();
+    let storage_path = PathBuf::from(STORAGE_DIR);
+
+    if let Ok(entries) = fs::read_dir(&storage_path) {
+        for entry in entries.flatten() {
+            if let Ok(file_type) = entry.file_type() {
+                if file_type.is_dir() {
+                    let metadata_path = entry.path().join("metadata.json");
+                    if metadata_path.exists() {
+                        if let Ok(content) = fs::read_to_string(&metadata_path) {
+                            if let Ok(version_data) = serde_json::from_str::<AetherVersion>(&content) {
+                                versions.push(version_data);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if versions.is_empty() {
+        return Err((StatusCode::NOT_FOUND, Json(serde_json::json!({"error": "No versions available"}))));
+    }
+
+    versions.sort_by(|a, b| b.release_date.cmp(&a.release_date));
+    Ok(Json(versions.into_iter().next().unwrap()))
 }
 
 pub async fn download_handler(Query(params): Query<DownloadQuery>) -> Result<impl IntoResponse, (StatusCode, String)> {
@@ -199,6 +232,8 @@ pub async fn upload_handler(
         release_date: chrono::Utc::now().to_rfc3339(),
         filename: filename.clone(),
         size: file_bytes.len() as u64,
+        bundle_filename: None,
+        bundle_size: None,
     };
 
     let metadata_path = version_dir.join("metadata.json");
