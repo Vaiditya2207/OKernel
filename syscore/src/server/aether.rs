@@ -163,6 +163,63 @@ pub async fn download_handler(Query(params): Query<DownloadQuery>) -> Result<imp
     Ok((headers, body))
 }
 
+pub async fn bundle_download_handler(Query(params): Query<DownloadQuery>) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let version_str = params.v.unwrap_or_else(|| "latest".to_string());
+    
+    // 1. Resolve version
+    let target_version = if version_str == "latest" {
+        let mut version_objs = Vec::new();
+        let storage_path = PathBuf::from(STORAGE_DIR);
+        if let Ok(entries) = fs::read_dir(&storage_path) {
+            for entry in entries.flatten() {
+                 let metadata_path = entry.path().join("metadata.json");
+                 if let Ok(content) = fs::read_to_string(&metadata_path) {
+                     if let Ok(v) = serde_json::from_str::<AetherVersion>(&content) {
+                         version_objs.push(v);
+                     }
+                 }
+            }
+        }
+        version_objs.sort_by(|a, b| b.release_date.cmp(&a.release_date));
+        
+        if let Some(latest) = version_objs.first() {
+            latest.version.clone()
+        } else {
+            return Err((StatusCode::NOT_FOUND, "No versions available".to_string()));
+        }
+    } else {
+        version_str
+    };
+
+    // 2. Sanitize
+    if target_version.contains("..") || target_version.contains("/") || target_version.contains("\\") {
+         return Err((StatusCode::BAD_REQUEST, "Invalid version format".to_string()));
+    }
+
+    // 3. Find metadata and bundle
+    let version_dir = PathBuf::from(STORAGE_DIR).join(&target_version);
+    let metadata_path = version_dir.join("metadata.json");
+    let metadata_content = fs::read_to_string(&metadata_path).map_err(|_| (StatusCode::NOT_FOUND, format!("Version {} not found", target_version)))?;
+    let metadata: AetherVersion = serde_json::from_str(&metadata_content).map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Invalid metadata".to_string()))?;
+
+    let bundle_filename = metadata.bundle_filename.ok_or((StatusCode::NOT_FOUND, format!("No bundle available for version {}", target_version)))?;
+    let file_path = version_dir.join(&bundle_filename);
+    
+    // 4. Stream file
+    let file = tokio_fs::File::open(&file_path).await.map_err(|_| (StatusCode::NOT_FOUND, "Bundle file not found".to_string()))?;
+    let stream = tokio_util::io::ReaderStream::new(file);
+    let body = Body::from_stream(stream);
+
+    let mut headers = HeaderMap::new();
+    headers.insert(axum::http::header::CONTENT_TYPE, "application/gzip".parse().unwrap());
+    headers.insert(
+        axum::http::header::CONTENT_DISPOSITION,
+        format!("attachment; filename=\"{}\"", bundle_filename).parse().unwrap()
+    );
+
+    Ok((headers, body))
+}
+
 pub async fn upload_handler(
     headers: HeaderMap,
     mut multipart: Multipart,
@@ -184,6 +241,8 @@ pub async fn upload_handler(
     let mut changelog: Option<String> = None;
     let mut file_bytes: Option<Vec<u8>> = None;
     let mut filename: Option<String> = None;
+    let mut bundle_bytes: Option<Vec<u8>> = None;
+    let mut bundle_filename: Option<String> = None;
 
     while let Some(field) = multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
         let name = field.name().unwrap_or("").to_string();
@@ -192,6 +251,10 @@ pub async fn upload_handler(
             filename = field.file_name().map(|s| s.to_string());
             let data = field.bytes().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             file_bytes = Some(data.to_vec());
+        } else if name == "bundle" {
+            bundle_filename = field.file_name().map(|s| s.to_string());
+            let data = field.bytes().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            bundle_bytes = Some(data.to_vec());
         } else {
             let data = field.text().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
             match name.as_str() {
@@ -204,8 +267,8 @@ pub async fn upload_handler(
     }
 
     let version = version.ok_or((StatusCode::BAD_REQUEST, "Missing version".to_string()))?;
-    let file_bytes = file_bytes.ok_or((StatusCode::BAD_REQUEST, "Missing file".to_string()))?;
-    let filename = filename.ok_or((StatusCode::BAD_REQUEST, "Missing filename".to_string()))?;
+    let file_bytes = file_bytes.ok_or((StatusCode::BAD_REQUEST, "Missing file (dmg)".to_string()))?;
+    let filename = filename.ok_or((StatusCode::BAD_REQUEST, "Missing filename (dmg)".to_string()))?;
     let description = description.unwrap_or_default();
     let changelog = changelog.unwrap_or_default();
 
@@ -222,8 +285,15 @@ pub async fn upload_handler(
     // 4. Save to Disk
     tokio_fs::create_dir_all(&version_dir).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     
+    // Save DMG
     let file_path = version_dir.join(&filename);
     tokio_fs::write(&file_path, &file_bytes).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Save Bundle (optional)
+    if let (Some(b_bytes), Some(b_name)) = (&bundle_bytes, &bundle_filename) {
+        let bundle_path = version_dir.join(b_name);
+        tokio_fs::write(&bundle_path, b_bytes).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
 
     let metadata = AetherVersion {
         version: version.clone(),
@@ -232,8 +302,8 @@ pub async fn upload_handler(
         release_date: chrono::Utc::now().to_rfc3339(),
         filename: filename.clone(),
         size: file_bytes.len() as u64,
-        bundle_filename: None,
-        bundle_size: None,
+        bundle_filename: bundle_filename.clone(),
+        bundle_size: bundle_bytes.as_ref().map(|b| b.len() as u64),
     };
 
     let metadata_path = version_dir.join("metadata.json");

@@ -13,7 +13,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use std::sync::Arc;
 use crate::docker::manager::ContainerManagerTrait;
 use crate::server::routes::{execute_handler, simulate_tick_handler, vm_malloc_handler, vm_write_handler, vm_reset_handler, vm_fs_handler};
-use crate::server::aether::{upload_handler, list_handlers, download_handler, latest_handler};
+use crate::server::aether::{upload_handler, list_handlers, download_handler, latest_handler, bundle_download_handler};
 use crate::server::websocket::websocket_handler;
 
 pub fn create_app(container_manager: Arc<dyn ContainerManagerTrait>) -> Router {
@@ -29,6 +29,7 @@ pub fn create_app(container_manager: Arc<dyn ContainerManagerTrait>) -> Router {
         .route("/api/v1/aether", get(list_handlers).post(upload_handler))
         .route("/api/v1/aether/latest", get(latest_handler))
         .route("/api/v1/aether/download", get(download_handler))
+        .route("/api/v1/aether/download/bundle", get(bundle_download_handler))
         .route("/ws/stream", get(websocket_handler))
         .layer(RequestBodyLimitLayer::new(50 * 1024 * 1024)) // 50MB limit for Aether uploads
         .layer(

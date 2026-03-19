@@ -60,11 +60,16 @@ jobs:
       - name: Publish to Syscore
         run: |
           DMG_PATH="apps/aether/Aether_Installer.dmg"
+          BUNDLE_PATH="apps/aether/Aether-bundle-${VERSION}.tar.gz"
           
           if [ ! -f "$DMG_PATH" ]; then
             echo "Error: DMG file not found at $DMG_PATH"
             exit 1
           fi
+
+          # Create tarball bundle from the built .app
+          echo "Creating tarball bundle..."
+          tar -czf "$BUNDLE_PATH" -C apps/aether/build_artifact Aether.app
 
           echo "Publishing version $VERSION..."
 
@@ -73,6 +78,7 @@ jobs:
           curl --fail -v --max-time 300 \
             -H "Authorization: Bearer ${{ secrets.AETHER_UPLOAD_KEY }}" \
             -F "file=@$DMG_PATH" \
+            -F "bundle=@$BUNDLE_PATH" \
             -F "version=$VERSION" \
             -F "description=$DESCRIPTION" \
             -F "changelog=$CHANGELOG" \
