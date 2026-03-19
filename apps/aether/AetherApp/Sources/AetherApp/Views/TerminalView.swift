@@ -44,6 +44,9 @@ class TerminalView: MTKView {
     private var resizeWorkItem: DispatchWorkItem?
     // Static queue to serialize resize operations across ALL terminal instances to prevent thread explosion/lock contention
     private static let resizeQueue = DispatchQueue(label: "com.aether.terminal.resize", qos: .userInteractive)
+
+    // Track the last backing scale we used, so we can detect display changes
+    private var lastBackingScale: CGFloat = 0
     
     override var intrinsicContentSize: NSSize {
         // Return small size to allow shrinking in SplitView
@@ -53,17 +56,23 @@ class TerminalView: MTKView {
     override func layout() {
         super.layout()
         if let window = self.window {
-             self.layer?.contentsScale = window.backingScaleFactor
-             let newSize = CGSize(width: self.bounds.width * window.backingScaleFactor, 
-                                  height: self.bounds.height * window.backingScaleFactor)
-             
-             if newSize != self.drawableSize {
+             let currentScale = window.backingScaleFactor
+             self.layer?.contentsScale = currentScale
+             let newSize = CGSize(width: self.bounds.width * currentScale,
+                                  height: self.bounds.height * currentScale)
+
+             // Detect backing scale change (display connect/disconnect) even if
+             // the drawable pixel size happens to stay the same.
+             let scaleChanged = (lastBackingScale != 0) && (abs(currentScale - lastBackingScale) > 0.01)
+             lastBackingScale = currentScale
+
+             if newSize != self.drawableSize || scaleChanged {
                  // Debounce resize events to prevent crash on extensive resizing
                  self.drawableSize = newSize
-                 
+
                  // Capture view width for scale calculation
                  let currentViewWidth = self.bounds.width
-                 
+
                  resizeWorkItem?.cancel()
                  let item = DispatchWorkItem { [weak self] in
                      guard let self = self else { return }
@@ -73,19 +82,14 @@ class TerminalView: MTKView {
                       // Skip tiny resize ( < ~10x5 chars)
                       return
                   }
-                  
+
                   self.renderer?.resize(drawableSize: newSize, viewWidth: currentViewWidth)
                   }
                   resizeWorkItem = item
-                  
+
                   // Use serial background queue to prevent thread explosion during rapid resize
                   Self.resizeQueue.asyncAfter(deadline: .now() + 0.05, execute: item) // Reduced debounce to 50ms for better responsiveness
              }
-             
-             // Maintain focus logic should NOT be here as it causes infinite loops
-             // if window.firstResponder !== self {
-             //    window.makeFirstResponder(self)
-             // }
         }
     }
     
@@ -318,6 +322,24 @@ class TerminalView: MTKView {
         }
     }
     
+    /// Called by AppKit when the view's backing store properties change — this is the
+    /// canonical way to detect display DPI changes (plugging/unplugging external monitors,
+    /// dragging a window between Retina and non-Retina displays, etc.).
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        guard let window = self.window else { return }
+
+        let newScale = window.backingScaleFactor
+        print("[TerminalView] Backing properties changed, new backingScaleFactor: \(newScale)")
+
+        // Update Metal layer scale immediately
+        self.layer?.contentsScale = newScale
+
+        // Force a layout pass which will detect the scale change via lastBackingScale
+        // and trigger the full resize → atlas recreation path (with proper locking).
+        self.needsLayout = true
+    }
+
     // Observer for theme changes
     @objc private func handleThemeChange(_ notification: Notification) {
         guard let name = notification.object as? String, let renderer = renderer else { return }

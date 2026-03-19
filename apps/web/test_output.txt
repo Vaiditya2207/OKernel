@@ -1,0 +1,538 @@
+
+[1m[46m RUN [49m[22m [36mv4.0.18 [39m[90m/Users/vaiditya/Desktop/dev/OKernel/apps/web[39m
+
+ [32m✓[39m src/apps/cpu-scheduler/tests/components/ProcessList.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 139[2mms[22m[39m
+ [32m✓[39m src/apps/code-tracer/components/__tests__/CodeEditorHighlight.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 250[2mms[22m[39m
+ [31m❯[39m src/apps/cpu-scheduler/tests/components/Controls.test.tsx [2m([22m[2m8 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[32m 194[2mms[22m[39m
+[31m     [31m×[31m renders correctly in initial state[39m[32m 65[2mms[22m[39m
+     [32m✓[39m toggles playback state when play button is clicked[32m 12[2mms[22m[39m
+     [32m✓[39m renders PAUSE when playing[32m 6[2mms[22m[39m
+     [32m✓[39m calls onReset when reset button is clicked[32m 6[2mms[22m[39m
+[31m     [31m×[31m changes algorithm when selected[39m[32m 81[2mms[22m[39m
+     [32m✓[39m shows time quantum input only when RR is selected[32m 4[2mms[22m[39m
+     [32m✓[39m does not show time quantum input when non-RR algorithm is selected[32m 10[2mms[22m[39m
+     [32m✓[39m updates speed when slider is moved[32m 8[2mms[22m[39m
+(node:42329) Warning: `--localstorage-file` was provided without a valid path
+(Use `node --trace-warnings ...` to show where the warning was created)
+ [31m❯[39m src/pages/__tests__/Settings.test.tsx [2m([22m[2m5 tests[22m[2m | [22m[31m5 failed[39m[2m)[22m[32m 9[2mms[22m[39m
+[31m     [31m×[31m renders all settings sections correctly[39m[32m 5[2mms[22m[39m
+[31m     [31m×[31m updates theme in localStorage when selected[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m toggles grid animation preference[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m updates font size preference[39m[32m 0[2mms[22m[39m
+[31m     [31m×[31m loads saved preferences from localStorage on mount[39m[32m 2[2mms[22m[39m
+ [32m✓[39m src/apps/code-tracer/components/__tests__/StatsView.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 194[2mms[22m[39m
+ [32m✓[39m src/apps/cpu-scheduler/tests/components/Cpu.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 299[2mms[22m[39m
+ [32m✓[39m src/apps/code-tracer/components/__tests__/FlameGraph.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 123[2mms[22m[39m
+ [32m✓[39m src/apps/cpu-scheduler/tests/Page.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 203[2mms[22m[39m
+ [32m✓[39m src/pages/__tests__/Dashboard.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 287[2mms[22m[39m
+ [31m❯[39m e2e/home.spec.ts [2m([22m[2m0 test[22m[2m)[22m
+ [31m❯[39m e2e/scheduler.spec.ts [2m([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m src/apps/code-tracer/LandingPage.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 92[2mms[22m[39m
+[90mstdout[2m | src/syscore/cpu/algos/priority.perf.test.ts[2m > [22m[2mPriority Algorithm[2m > [22m[2mshould be fast
+[22m[39m[Perf] Time taken for 10 iterations with 20000 processes and 5000 queue size: 35.05ms
+[Perf] Average time per iteration: 3.5051ms
+
+ [32m✓[39m src/syscore/cpu/algos/priority.perf.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 43[2mms[22m[39m
+ [32m✓[39m src/apps/cpu-scheduler/tests/components/ReadyQueue.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[32m 44[2mms[22m[39m
+ [32m✓[39m src/apps/code-tracer/components/__tests__/CodeEditor.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m src/syscore/terminal/commands.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 4[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m e2e/home.spec.ts[2m [ e2e/home.spec.ts ][22m
+[31m[1mError[22m: Playwright Test did not expect test() to be called here.
+Most common reasons include:
+- You are calling test() in a configuration file.
+- You are calling test() in a file that is imported by the configuration file.
+- You have two different versions of @playwright/test. This usually happens
+  when one of the dependencies in your package.json depends on @playwright/test.[39m
+[90m [2m❯[22m TestTypeImpl._currentSuite node_modules/playwright/lib/common/testType.js:[2m75:13[22m[39m
+[90m [2m❯[22m TestTypeImpl._createTest node_modules/playwright/lib/common/testType.js:[2m88:24[22m[39m
+[90m [2m❯[22m node_modules/playwright/lib/transform/transform.js:[2m282:12[22m[39m
+[36m [2m❯[22m e2e/home.spec.ts:[2m3:1[22m[39m
+    [90m  1| [39m[35mimport[39m { test[33m,[39m expect } [35mfrom[39m [32m'@playwright/test'[39m[33m;[39m
+    [90m  2| [39m
+    [90m  3| [39m[34mtest[39m([32m'has title'[39m[33m,[39m [35masync[39m ({ page }) [33m=>[39m {
+    [90m   | [39m[31m^[39m
+    [90m  4| [39m  [35mawait[39m page[33m.[39m[34mgoto[39m([32m'/'[39m)[33m;[39m
+    [90m  5| [39m  [35mawait[39m [34mexpect[39m(page)[33m.[39m[34mtoHaveTitle[39m([36m/OKernel/[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m e2e/scheduler.spec.ts[2m [ e2e/scheduler.spec.ts ][22m
+[31m[1mError[22m: Playwright Test did not expect test.describe() to be called here.
+Most common reasons include:
+- You are calling test.describe() in a configuration file.
+- You are calling test.describe() in a file that is imported by the configuration file.
+- You have two different versions of @playwright/test. This usually happens
+  when one of the dependencies in your package.json depends on @playwright/test.[39m
+[90m [2m❯[22m TestTypeImpl._currentSuite node_modules/playwright/lib/common/testType.js:[2m75:13[22m[39m
+[90m [2m❯[22m TestTypeImpl._describe node_modules/playwright/lib/common/testType.js:[2m115:24[22m[39m
+[90m [2m❯[22m Function.describe node_modules/playwright/lib/transform/transform.js:[2m282:12[22m[39m
+[36m [2m❯[22m e2e/scheduler.spec.ts:[2m3:6[22m[39m
+    [90m  1| [39m[35mimport[39m { test[33m,[39m expect } [35mfrom[39m [32m'@playwright/test'[39m[33m;[39m
+    [90m  2| [39m
+    [90m  3| [39mtest[33m.[39m[34mdescribe[39m([32m'CPU Scheduler Simulation'[39m[33m,[39m () [33m=>[39m {
+    [90m   | [39m     [31m^[39m
+    [90m  4| [39m  test[33m.[39m[34mbeforeEach[39m([35masync[39m ({ page }) [33m=>[39m {
+    [90m  5| [39m    [35mawait[39m page[33m.[39m[34mgoto[39m([32m'/cpu-scheduler'[39m)[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯[22m[39m
+
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 7 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m src/pages/__tests__/Settings.test.tsx[2m > [22mSettings Page[2m > [22mrenders all settings sections correctly
+[41m[1m FAIL [22m[49m src/pages/__tests__/Settings.test.tsx[2m > [22mSettings Page[2m > [22mupdates theme in localStorage when selected
+[41m[1m FAIL [22m[49m src/pages/__tests__/Settings.test.tsx[2m > [22mSettings Page[2m > [22mtoggles grid animation preference
+[41m[1m FAIL [22m[49m src/pages/__tests__/Settings.test.tsx[2m > [22mSettings Page[2m > [22mupdates font size preference
+[41m[1m FAIL [22m[49m src/pages/__tests__/Settings.test.tsx[2m > [22mSettings Page[2m > [22mloads saved preferences from localStorage on mount
+[31m[1mTypeError[22m: localStorage.clear is not a function[39m
+[36m [2m❯[22m src/pages/__tests__/Settings.test.tsx:[2m26:18[22m[39m
+    [90m 24| [39m[34mdescribe[39m([32m'Settings Page'[39m[33m,[39m () [33m=>[39m {
+    [90m 25| [39m  [34mbeforeEach[39m(() [33m=>[39m {
+    [90m 26| [39m    localStorage[33m.[39m[34mclear[39m()[33m;[39m
+    [90m   | [39m                 [31m^[39m
+    [90m 27| [39m    vi[33m.[39m[34mclearAllMocks[39m()[33m;[39m
+    [90m 28| [39m  })[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/apps/cpu-scheduler/tests/components/Controls.test.tsx[2m > [22mControls Component[2m > [22mrenders correctly in initial state
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the display value: First Come First Serve.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"flex overflow-x-auto whitespace-nowrap items-center gap-4 w-full font-mono text-xs pb-2 custom-scrollbar"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center -space-x-px shrink-0"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"h-8 px-4 flex items-center justify-center border transition-colors bg-zinc-900 border-green-800 text-green-500 hover:bg-green-900/20"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"flex items-center gap-2"[39m
+          [36m>[39m
+            [0m[ EXEC ][0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"h-8 px-3 flex items-center justify-center border border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"[39m
+          [33mtitle[39m=[32m"Reset Simulation"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-rotate-ccw"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"14"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"14"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M3 3v5h5"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"w-px h-6 bg-zinc-800 mx-2 hidden sm:block shrink-0"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"relative shrink-0 flex items-center gap-2"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"text-zinc-500 select-none"[39m
+        [36m>[39m
+          [0mALGO:[0m
+        [36m</span>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"h-8 flex items-center gap-2 pl-3 pr-2 border transition-all duration-150 select-none border-zinc-700 bg-black text-white hover:border-zinc-500 cursor-pointer"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-[9px] font-bold px-1 py-px border border-zinc-600 text-zinc-400 leading-none tracking-wider uppercase"[39m
+          [36m>[39m
+            [0mFCFS[0m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-[11px] font-semibold tracking-wide max-w-[140px] truncate uppercase"[39m
+          [36m>[39m
+            [0mFirst Come First Serve[0m
+          [36m</span>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-chevron-down text-zinc-500 transition-transform duration-200 ml-0.5"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"11"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"11"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m6 9 6 6 6-6"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200 shrink-0"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"text-zinc-500 select-none"[39m
+        [36m>[39m
+          [0mCORES:[0m
+        [36m</span>[39m
+        [36m<input[39m
+          [33mclass[39m=[32m"bg-black border border-zinc-700 text-white h-8 w-14 px-2 focus:outline-none focus:border-primary text-center"[39m
+          [33mmax[39m=[32m"8"[39m
+          [33mmin[39m=[32m"1"[39m
+          [33mtype[39m=[32m"number"[39m
+          [33mvalue[39m=[32m"1"[39m
+        [36m/>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200 shrink-0"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"text-zinc-500 select-none"[39m
+        [36m>[39m
+          [0mCS_COST:[0m
+        [36m</span>[39m
+        [36m<input[39m
+          [33mclass[39m=[32m"bg-black border border-zinc-700 text-white h-8 w-14 px-2 focus:outline-none focus:border-primary text-center"[39m
+          [33mmin[39m=[32m"0"[39m
+          [33mtype[39m=[32m"number"[39m
+          [33mvalue[39m=[32m"1"[39m
+        [36m/>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex-1"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center gap-4 shrink-0"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"text-zinc-500 select-none hidden sm:inline"[39m
+        [36m>[39m
+          [0mCLOCK_RATE:[0m
+        [36m</span>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-2"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-zinc-600"[39m
+          [36m>[39m
+            [0mSLOW[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33mclass[39m=[32m"w-24 h-1 bg-zinc-800 rounded-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-primary"[39m
+            [33mmax[39m=[32m"2000"[39m
+            [33mmin[39m=[32m"100"[39m
+            [33mstep[39m=[32m"100"[39m
+            [33mtype[39m=[32m"range"[39m
+            [33mvalue[39m=[32m"1100"[39m
+          [36m/>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-zinc-600"[39m
+          [36m>[39m
+            [0mFAST[0m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center gap-2 border border-zinc-800 bg-black h-8 px-3 min-w-[100px] justify-between shrink-0"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"text-zinc-600"[39m
+        [36m>[39m
+          [0mT=[0m
+        [36m</span>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"text-primary font-bold"[39m
+        [36m>[39m
+          [0m0[0m
+          [0mms[0m
+        [36m</span>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/apps/cpu-scheduler/tests/components/Controls.test.tsx:[2m41:19[22m[39m
+    [90m 39| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByTitle[39m([32m'Reset Simulation'[39m))[33m.[39m[34mtoBeInTheDocument[39m()[33m;[39m
+    [90m 40| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'ALGO:'[39m))[33m.[39m[34mtoBeInTheDocument[39m()[33m;[39m
+    [90m 41| [39m    expect(screen.getByDisplayValue('First Come First Serve')).toBeInT…
+    [90m   | [39m                  [31m^[39m
+    [90m 42| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'T='[39m))[33m.[39m[34mtoBeInTheDocument[39m()[33m;[39m
+    [90m 43| [39m    [34mexpect[39m(screen[33m.[39m[34mgetByText[39m([32m'0ms'[39m))[33m.[39m[34mtoBeInTheDocument[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m src/apps/cpu-scheduler/tests/components/Controls.test.tsx[2m > [22mControls Component[2m > [22mchanges algorithm when selected
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an accessible element with the role "combobox"
+
+Here are the accessible roles:
+
+  button:
+
+  Name "[ EXEC ]":
+  [36m<button[39m
+    [33mclass[39m=[32m"h-8 px-4 flex items-center justify-center border transition-colors bg-zinc-900 border-green-800 text-green-500 hover:bg-green-900/20"[39m
+  [36m/>[39m
+
+  Name "Reset Simulation":
+  [36m<button[39m
+    [33mclass[39m=[32m"h-8 px-3 flex items-center justify-center border border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"[39m
+    [33mtitle[39m=[32m"Reset Simulation"[39m
+  [36m/>[39m
+
+  Name "FCFS First Come First Serve":
+  [36m<button[39m
+    [33mclass[39m=[32m"h-8 flex items-center gap-2 pl-3 pr-2 border transition-all duration-150 select-none border-zinc-700 bg-black text-white hover:border-zinc-500 cursor-pointer"[39m
+    [33mtype[39m=[32m"button"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  spinbutton:
+
+  Name "":
+  [36m<input[39m
+    [33mclass[39m=[32m"bg-black border border-zinc-700 text-white h-8 w-14 px-2 focus:outline-none focus:border-primary text-center"[39m
+    [33mmax[39m=[32m"8"[39m
+    [33mmin[39m=[32m"1"[39m
+    [33mtype[39m=[32m"number"[39m
+    [33mvalue[39m=[32m"1"[39m
+  [36m/>[39m
+
+  Name "":
+  [36m<input[39m
+    [33mclass[39m=[32m"bg-black border border-zinc-700 text-white h-8 w-14 px-2 focus:outline-none focus:border-primary text-center"[39m
+    [33mmin[39m=[32m"0"[39m
+    [33mtype[39m=[32m"number"[39m
+    [33mvalue[39m=[32m"1"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+  slider:
+
+  Name "":
+  [36m<input[39m
+    [33mclass[39m=[32m"w-24 h-1 bg-zinc-800 rounded-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-primary"[39m
+    [33mmax[39m=[32m"2000"[39m
+    [33mmin[39m=[32m"100"[39m
+    [33mstep[39m=[32m"100"[39m
+    [33mtype[39m=[32m"range"[39m
+    [33mvalue[39m=[32m"1100"[39m
+  [36m/>[39m
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"flex overflow-x-auto whitespace-nowrap items-center gap-4 w-full font-mono text-xs pb-2 custom-scrollbar"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center -space-x-px shrink-0"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"h-8 px-4 flex items-center justify-center border transition-colors bg-zinc-900 border-green-800 text-green-500 hover:bg-green-900/20"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"flex items-center gap-2"[39m
+          [36m>[39m
+            [0m[ EXEC ][0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"h-8 px-3 flex items-center justify-center border border-zinc-700 bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"[39m
+          [33mtitle[39m=[32m"Reset Simulation"[39m
+        [36m>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-rotate-ccw"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"14"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"14"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"[39m
+            [36m/>[39m
+            [36m<path[39m
+              [33md[39m=[32m"M3 3v5h5"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"w-px h-6 bg-zinc-800 mx-2 hidden sm:block shrink-0"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"relative shrink-0 flex items-center gap-2"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"text-zinc-500 select-none"[39m
+        [36m>[39m
+          [0mALGO:[0m
+        [36m</span>[39m
+        [36m<button[39m
+          [33mclass[39m=[32m"h-8 flex items-center gap-2 pl-3 pr-2 border transition-all duration-150 select-none border-zinc-700 bg-black text-white hover:border-zinc-500 cursor-pointer"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-[9px] font-bold px-1 py-px border border-zinc-600 text-zinc-400 leading-none tracking-wider uppercase"[39m
+          [36m>[39m
+            [0mFCFS[0m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-[11px] font-semibold tracking-wide max-w-[140px] truncate uppercase"[39m
+          [36m>[39m
+            [0mFirst Come First Serve[0m
+          [36m</span>[39m
+          [36m<svg[39m
+            [33maria-hidden[39m=[32m"true"[39m
+            [33mclass[39m=[32m"lucide lucide-chevron-down text-zinc-500 transition-transform duration-200 ml-0.5"[39m
+            [33mfill[39m=[32m"none"[39m
+            [33mheight[39m=[32m"11"[39m
+            [33mstroke[39m=[32m"currentColor"[39m
+            [33mstroke-linecap[39m=[32m"round"[39m
+            [33mstroke-linejoin[39m=[32m"round"[39m
+            [33mstroke-width[39m=[32m"2"[39m
+            [33mviewBox[39m=[32m"0 0 24 24"[39m
+            [33mwidth[39m=[32m"11"[39m
+            [33mxmlns[39m=[32m"http://www.w3.org/2000/svg"[39m
+          [36m>[39m
+            [36m<path[39m
+              [33md[39m=[32m"m6 9 6 6 6-6"[39m
+            [36m/>[39m
+          [36m</svg>[39m
+        [36m</button>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200 shrink-0"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"text-zinc-500 select-none"[39m
+        [36m>[39m
+          [0mCORES:[0m
+        [36m</span>[39m
+        [36m<input[39m
+          [33mclass[39m=[32m"bg-black border border-zinc-700 text-white h-8 w-14 px-2 focus:outline-none focus:border-primary text-center"[39m
+          [33mmax[39m=[32m"8"[39m
+          [33mmin[39m=[32m"1"[39m
+          [33mtype[39m=[32m"number"[39m
+          [33mvalue[39m=[32m"1"[39m
+        [36m/>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200 shrink-0"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"text-zinc-500 select-none"[39m
+        [36m>[39m
+          [0mCS_COST:[0m
+        [36m</span>[39m
+        [36m<input[39m
+          [33mclass[39m=[32m"bg-black border border-zinc-700 text-white h-8 w-14 px-2 focus:outline-none focus:border-primary text-center"[39m
+          [33mmin[39m=[32m"0"[39m
+          [33mtype[39m=[32m"number"[39m
+          [33mvalue[39m=[32m"1"[39m
+        [36m/>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex-1"[39m
+      [36m/>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center gap-4 shrink-0"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"text-zinc-500 select-none hidden sm:inline"[39m
+        [36m>[39m
+          [0mCLOCK_RATE:[0m
+        [36m</span>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"flex items-center gap-2"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-zinc-600"[39m
+          [36m>[39m
+            [0mSLOW[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33mclass[39m=[32m"w-24 h-1 bg-zinc-800 rounded-none appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-primary"[39m
+            [33mmax[39m=[32m"2000"[39m
+            [33mmin[39m=[32m"100"[39m
+            [33mstep[39m=[32m"100"[39m
+            [33mtype[39m=[32m"range"[39m
+            [33mvalue[39m=[32m"1100"[39m
+          [36m/>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"text-zinc-600"[39m
+          [36m>[39m
+            [0mFAST[0m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"flex items-center gap-2 border border-zinc-800 bg-black h-8 px-3 min-w-[100px] justify-between shrink-0"[39m
+      [36m>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"text-zinc-600"[39m
+        [36m>[39m
+          [0mT=[0m
+        [36m</span>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"text-primary font-bold"[39m
+        [36m>[39m
+          [0m0[0m
+          [0mms[0m
+        [36m</span>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m Object.getElementError node_modules/@testing-library/dom/dist/config.js:[2m37:19[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m76:38[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m52:17[22m[39m
+[90m [2m❯[22m node_modules/@testing-library/dom/dist/query-helpers.js:[2m95:19[22m[39m
+[36m [2m❯[22m src/apps/cpu-scheduler/tests/components/Controls.test.tsx:[2m69:27[22m[39m
+    [90m 67| [39m  [34mit[39m([32m'changes algorithm when selected'[39m[33m,[39m () [33m=>[39m {
+    [90m 68| [39m    render(<Controls state={mockState} setState={mockSetState} onReset…
+    [90m 69| [39m    [35mconst[39m select [33m=[39m screen[33m.[39m[34mgetByRole[39m([32m'combobox'[39m)[33m;[39m
+    [90m   | [39m                          [31m^[39m
+    [90m 70| [39m    fireEvent[33m.[39m[34mchange[39m(select[33m,[39m { target[33m:[39m { value[33m:[39m [32m'SJF'[39m } })[33m;[39m
+    [90m 71| [39m    [34mexpect[39m(mockSetState)[33m.[39m[34mtoHaveBeenCalled[39m()[33m;[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m12 passed[39m[22m[90m (16)[39m
+[2m      Tests [22m [1m[31m7 failed[39m[22m[2m | [22m[1m[32m53 passed[39m[22m[90m (60)[39m
+[2m   Start at [22m 01:23:33
+[2m   Duration [22m 4.12s[2m (transform 2.35s, setup 996ms, import 5.91s, tests 1.90s, environment 8.76s)[22m
+
