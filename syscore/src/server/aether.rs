@@ -11,7 +11,7 @@ use std::fs;
 use std::path::{PathBuf, Component};
 use tokio::fs as tokio_fs;
 use tokio::io::AsyncWriteExt;
-use tracing::{info, error};
+use tracing::{info, error, warn};
 
 const STORAGE_DIR: &str = "storage/aether";
 
@@ -35,6 +35,10 @@ pub struct AetherVersion {
     pub patch_size: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub patch_from_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bundle_signature: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub patch_signature: Option<String>,
 }
 
 fn default_channel() -> String {
@@ -326,6 +330,8 @@ pub async fn upload_handler(
     let mut patch_bytes: Option<Vec<u8>> = None;
     let mut patch_filename: Option<String> = None;
     let mut patch_from_version: Option<String> = None;
+    let mut bundle_signature: Option<String> = None;
+    let mut patch_signature: Option<String> = None;
 
     while let Some(field) = multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
         let name = field.name().unwrap_or("").to_string();
@@ -350,6 +356,8 @@ pub async fn upload_handler(
                 "description" => description = Some(data),
                 "changelog" => changelog = Some(data),
                 "patch_from" => patch_from_version = Some(data),
+                "bundle_signature" => bundle_signature = Some(data),
+                "patch_signature" => patch_signature = Some(data),
                 _ => {}
             }
         }
@@ -404,6 +412,8 @@ pub async fn upload_handler(
         patch_filename: patch_filename.clone(),
         patch_size: patch_bytes.as_ref().map(|b| b.len() as u64),
         patch_from_version,
+        bundle_signature,
+        patch_signature,
     };
 
     let metadata_path = version_dir.join("metadata.json");
@@ -413,4 +423,22 @@ pub async fn upload_handler(
     info!("Published Aether version: {}", version);
 
     Ok((StatusCode::CREATED, format!("Version {} published successfully", version)))
+}
+
+#[derive(Deserialize, Debug)]
+pub struct TelemetryEvent {
+    pub version: String,
+    pub event: String,
+    pub channel: String,
+    pub os: String,
+}
+
+pub async fn telemetry_handler(Json(payload): Json<TelemetryEvent>) -> impl IntoResponse {
+    info!("Update Telemetry: {} version {} on {} ({})", payload.event, payload.version, payload.os, payload.channel);
+    
+    if payload.event == "rollback" {
+        warn!("CRITICAL: Version {} rollout experiencing rollbacks!", payload.version);
+    }
+    
+    StatusCode::OK
 }

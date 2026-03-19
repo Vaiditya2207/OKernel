@@ -96,7 +96,7 @@ struct UpdateModalView: View {
     
     @ViewBuilder
     private var contentView: some View {
-        if let info = updateManager.availableVersion {
+        if let info = updateManager.availableVersion, (updateManager.updateReadyForInstall || updateManager.state != .idle) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("Aether \(info.version)")

@@ -20,6 +20,11 @@ on:
         required: false
         type: string
         default: 'stable'
+      dry_run:
+        description: 'Dry run (build and sign but do not upload)'
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - 'v*'
@@ -48,6 +53,11 @@ jobs:
             # Get commit message as changelog or leave empty
             echo "CHANGELOG=${{ github.event.head_commit.message }}" >> $GITHUB_ENV
             echo "CHANNEL=stable" >> $GITHUB_ENV
+            echo "DRY_RUN=false" >> $GITHUB_ENV
+          fi
+          
+          if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+            echo "DRY_RUN=true" >> $GITHUB_ENV
           fi
 
       - uses: goto-bus-stop/setup-zig@v2
@@ -99,6 +109,25 @@ jobs:
             fi
           fi
 
+          # Phase 11: Cryptographic Signing
+          if [ ! -z "${{ secrets.AETHER_SIGNING_KEY }}" ]; then
+            echo "Signing update payloads..."
+            echo "${{ secrets.AETHER_SIGNING_KEY }}" > signing_key.pem
+            
+            openssl pkeyutl -sign -inkey signing_key.pem -rawin -in "$BUNDLE_PATH" -out bundle_sig.bin
+            BUNDLE_SIG=$(base64 -i bundle_sig.bin)
+            echo "BUNDLE_SIG=$BUNDLE_SIG" >> $GITHUB_ENV
+            
+            if [ ! -z "$PATCH_FILENAME" ]; then
+              openssl pkeyutl -sign -inkey signing_key.pem -rawin -in "$PATCH_FILENAME" -out patch_sig.bin
+              PATCH_SIG=$(base64 -i patch_sig.bin)
+              echo "PATCH_SIG=$PATCH_SIG" >> $GITHUB_ENV
+            fi
+            rm signing_key.pem bundle_sig.bin patch_sig.bin 2>/dev/null || true
+          else
+            echo "WARNING: AETHER_SIGNING_KEY not set. Skipping signing."
+          fi
+
           echo "Publishing version $VERSION..."
 
           # Upload via curl
@@ -110,12 +139,18 @@ jobs:
             -F \"version=$VERSION\" \
             -F \"channel=$CHANNEL\" \
             -F \"description=$DESCRIPTION\" \
-            -F \"changelog=$CHANGELOG\""
+            -F \"changelog=$CHANGELOG\" \
+            -F \"bundle_signature=$BUNDLE_SIG\""
             
           if [ ! -z "$PATCH_FILENAME" ]; then
-            CURL_CMD="$CURL_CMD -F \"patch=@$PATCH_FILENAME\" -F \"patch_from=$PATCH_FROM\""
+            CURL_CMD="$CURL_CMD -F \"patch=@$PATCH_FILENAME\" -F \"patch_from=$PATCH_FROM\" -F \"patch_signature=$PATCH_SIG\""
           fi
           
+          if [ "$DRY_RUN" == "true" ]; then
+            echo "DRY RUN COMPLETE: Skipping upload to SysCore."
+            exit 0
+          fi
+
           eval "$CURL_CMD https://api.hackmist.tech/api/v1/aether" \
             && echo "Upload successful!" \
             || echo "Upload failed with exit code $?"
