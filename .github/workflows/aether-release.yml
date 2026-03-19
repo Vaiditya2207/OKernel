@@ -20,6 +20,11 @@ on:
         required: false
         type: string
         default: 'stable'
+      dry_run:
+        description: 'Dry run (build and sign but do not upload)'
+        required: false
+        type: boolean
+        default: false
   push:
     tags:
       - 'v*'
@@ -48,6 +53,11 @@ jobs:
             # Get commit message as changelog or leave empty
             echo "CHANGELOG=${{ github.event.head_commit.message }}" >> $GITHUB_ENV
             echo "CHANNEL=stable" >> $GITHUB_ENV
+            echo "DRY_RUN=false" >> $GITHUB_ENV
+          fi
+          
+          if [ "${{ github.event.inputs.dry_run }}" == "true" ]; then
+            echo "DRY_RUN=true" >> $GITHUB_ENV
           fi
 
       - uses: goto-bus-stop/setup-zig@v2
@@ -136,6 +146,11 @@ jobs:
             CURL_CMD="$CURL_CMD -F \"patch=@$PATCH_FILENAME\" -F \"patch_from=$PATCH_FROM\" -F \"patch_signature=$PATCH_SIG\""
           fi
           
+          if [ "$DRY_RUN" == "true" ]; then
+            echo "DRY RUN COMPLETE: Skipping upload to SysCore."
+            exit 0
+          fi
+
           eval "$CURL_CMD https://api.hackmist.tech/api/v1/aether" \
             && echo "Upload successful!" \
             || echo "Upload failed with exit code $?"
