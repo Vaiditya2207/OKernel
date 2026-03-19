@@ -141,6 +141,13 @@ struct AetherApp: App {
                     .zIndex(101)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
+                
+                // Update Modal Overlay
+                if updateManager.showModal {
+                    UpdateModalView(isPresented: $updateManager.showModal)
+                        .zIndex(102)
+                        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                }
             }
             .background(Color.clear) // Ensure window background doesn't bleed if possible
             .onAppear {

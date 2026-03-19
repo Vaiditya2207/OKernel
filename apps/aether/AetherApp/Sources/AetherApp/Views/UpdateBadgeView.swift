@@ -10,7 +10,7 @@ struct UpdateBadgeView: View {
         if case .available(let version) = updateManager.state {
             Button(action: {
                 print("[UpdateBadgeView] User clicked update badge: \(version)")
-                updateManager.downloadUpdate()
+                updateManager.showModal = true
             }) {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.up.circle.fill")
