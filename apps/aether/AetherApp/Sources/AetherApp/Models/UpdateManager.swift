@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import AppKit
 
 /// Numeric semantic versioning (major.minor.patch)
 struct SemanticVersion: Comparable, CustomStringConvertible {
@@ -52,13 +53,14 @@ struct AetherVersionInfo: Codable {
     }
 }
 
-class UpdateManager: ObservableObject {
+class UpdateManager: NSObject, ObservableObject {
     static let shared = UpdateManager()
     
     @Published var state: UpdateState = .idle
     @Published var availableVersion: AetherVersionInfo?
     @Published var downloadProgress: Double = 0.0
     @Published var statusMessage: String = ""
+    @Published var showModal: Bool = false
     
     private var checkTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -87,7 +89,14 @@ class UpdateManager: ObservableObject {
     
     var isFailedState: Bool { state.isFailedState }
     
-    private init() {
+    private var downloadTask: URLSessionDownloadTask?
+    private lazy var downloadSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        return URLSession(configuration: config, delegate: self, delegateQueue: .main)
+    }()
+
+    override private init() {
+        super.init()
         // Log current version for debugging
         if let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String {
             print("[UpdateManager] Current version: \(currentVersion)")
@@ -138,7 +147,6 @@ class UpdateManager: ObservableObject {
             .sink { completion in
                 if case .failure(let error) = completion {
                     print("[UpdateManager] Check failed: \(error.localizedDescription)")
-                    // Silent fail if background, but record error if we were explicitly checking
                     self.state = .idle 
                 }
             } receiveValue: { info in
@@ -166,14 +174,176 @@ class UpdateManager: ObservableObject {
         }
     }
     
-    // MARK: - Stubs for Phase 4/5
+    // MARK: - Phase 4: Download
     
     func downloadUpdate() {
-        print("[UpdateManager] downloadUpdate() - Stube for Phase 4")
+        guard let info = availableVersion else { return }
+        let config = ConfigManager.shared.config.update
+        
+        guard let url = URL(string: "\(config.serverUrl)/api/v1/aether/download/bundle?v=\(info.version)") else {
+            state = .failed(error: "Invalid download URL")
+            return
+        }
+        
+        state = .downloading
+        downloadProgress = 0.0
+        
+        downloadTask = downloadSession.downloadTask(with: url)
+        downloadTask?.resume()
+        print("[UpdateManager] Started download: \(url.absoluteString)")
     }
     
     func cancelDownload() {
-        print("[UpdateManager] cancelDownload() - Stube for Phase 4")
+        downloadTask?.cancel()
+        downloadTask = nil
+        state = .idle
+        downloadProgress = 0.0
+    }
+    
+    // MARK: - Phase 5: Install
+    
+    func applyUpdate() {
+        guard let info = availableVersion else { return }
+        state = .installing
+        statusMessage = "Preparing installation..."
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            self.performInstallation(version: info.version)
+        }
+    }
+    
+    private func performInstallation(version: String) {
+        let fileManager = FileManager.default
+        let bundleURL = Bundle.main.bundleURL // /Applications/Aether.app
+        let contentsURL = bundleURL.appendingPathComponent("Contents")
+        
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let aetherDir = appSupport.appendingPathComponent("Aether")
+        let updatesDir = aetherDir.appendingPathComponent("updates").appendingPathComponent(version)
+        let backupDir = aetherDir.appendingPathComponent("backup")
+        let tarballPath = updatesDir.appendingPathComponent("Aether-bundle-\(version).tar.gz")
+        
+        do {
+            updateStatus("Checking permissions...")
+            // 1. Verify we can write to bundle
+            if !fileManager.isWritableFile(atPath: bundleURL.path) {
+                throw UpdateError.notWritable("Aether is not in a writable location (e.g. /Applications with SIP). Please move it to your Applications folder or a user-writable directory.")
+            }
+            
+            // 2. Backup
+            updateStatus("Creating backup...")
+            if fileManager.fileExists(atPath: backupDir.path) {
+                try fileManager.removeItem(at: backupDir)
+            }
+            try fileManager.createDirectory(at: backupDir, withIntermediateDirectories: true)
+            try fileManager.copyItem(at: contentsURL, to: backupDir.appendingPathComponent("Contents"))
+            
+            // 3. Extract
+            updateStatus("Extracting update...")
+            let tarProcess = Process()
+            tarProcess.executableURL = URL(fileURLWithPath: "/usr/bin/tar")
+            tarProcess.arguments = ["-xzf", tarballPath.path, "-C", bundleURL.path]
+            try tarProcess.run()
+            tarProcess.waitUntilExit()
+            
+            if tarProcess.terminationStatus != 0 {
+                throw UpdateError.extractionFailed("Tar extraction failed with exit code \(tarProcess.terminationStatus)")
+            }
+            
+            // 4. Re-sign (Ad-hoc)
+            updateStatus("Verifying signature...")
+            let signProcess = Process()
+            signProcess.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+            signProcess.arguments = ["--force", "--deep", "--sign", "-", bundleURL.path]
+            try signProcess.run()
+            signProcess.waitUntilExit()
+            
+            // 5. Success
+            updateStatus("Update complete!")
+            
+            // Record pending update for Phase 6 "What's New"
+            UserDefaults.standard.set(version, forKey: "pendingUpdateVersion")
+            if let changelog = availableVersion?.changelog {
+                UserDefaults.standard.set(changelog, forKey: "pendingUpdateChangelog")
+            }
+            
+            DispatchQueue.main.async {
+                self.state = .restartRequired
+            }
+            
+        } catch {
+            print("[UpdateManager] Installation failed: \(error)")
+            // Rollback
+            try? fileManager.removeItem(at: contentsURL)
+            try? fileManager.copyItem(at: backupDir.appendingPathComponent("Contents"), to: contentsURL)
+            
+            DispatchQueue.main.async {
+                self.state = .failed(error: (error as? UpdateError)?.message ?? error.localizedDescription)
+            }
+        }
+    }
+    
+    private func updateStatus(_ msg: String) {
+        DispatchQueue.main.async {
+            self.statusMessage = msg
+        }
+    }
+    
+    func restartApp() {
+        let bundleURL = Bundle.main.bundleURL
+        let configuration = NSWorkspace.OpenConfiguration()
+        NSWorkspace.shared.openApplication(at: bundleURL, configuration: configuration) { _, error in
+            if let error = error {
+                print("[UpdateManager] Failed to restart app: \(error)")
+            } else {
+                NSApp.terminate(nil)
+            }
+        }
+    }
+}
+
+extension UpdateManager: URLSessionDownloadDelegate {
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+        guard let info = availableVersion else { return }
+        let fileManager = FileManager.default
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let updatesDir = appSupport.appendingPathComponent("Aether/updates/\(info.version)")
+        let destination = updatesDir.appendingPathComponent("Aether-bundle-\(info.version).tar.gz")
+        
+        do {
+            try fileManager.createDirectory(at: updatesDir, withIntermediateDirectories: true)
+            if fileManager.fileExists(atPath: destination.path) {
+                try fileManager.removeItem(at: destination)
+            }
+            try fileManager.moveItem(at: location, to: destination)
+            
+            DispatchQueue.main.async {
+                self.state = .readyToInstall
+            }
+        } catch {
+            DispatchQueue.main.async {
+                self.state = .failed(error: "Failed to save update: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+        let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+        DispatchQueue.main.async {
+            self.downloadProgress = progress
+        }
+    }
+}
+
+enum UpdateError: Error {
+    case notWritable(String)
+    case extractionFailed(String)
+    
+    var message: String {
+        switch self {
+        case .notWritable(let m): return m
+        case .extractionFailed(let m): return m
+        }
     }
 }
 
