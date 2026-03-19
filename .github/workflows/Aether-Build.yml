@@ -14,7 +14,7 @@ jobs:
   build-zig:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: goto-bus-stop/setup-zig@v2
         with:
           version: 0.15.2
@@ -31,7 +31,7 @@ jobs:
     runs-on: macos-latest
     needs: build-zig
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: goto-bus-stop/setup-zig@v2
         with:
           version: 0.15.2
