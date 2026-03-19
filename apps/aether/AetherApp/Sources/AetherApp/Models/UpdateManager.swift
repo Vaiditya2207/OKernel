@@ -36,6 +36,12 @@ struct SemanticVersion: Comparable, CustomStringConvertible {
 }
 
 /// Metadata returned by GET /api/v1/aether/latest
+struct AetherVersionInfo: Codable {
+    let version: String
+    let description: String
+    let changelog: String
+    let releaseDate: String
+    let size: Int64
     let bundleFilename: String?
     let bundleSize: Int64?
     let channel: String?
@@ -52,6 +58,7 @@ struct SemanticVersion: Comparable, CustomStringConvertible {
         case patchSize = "patch_size"
         case patchFromVersion = "patch_from_version"
     }
+}
 
 class UpdateManager: NSObject, ObservableObject {
     static let shared = UpdateManager()
@@ -292,7 +299,7 @@ class UpdateManager: NSObject, ObservableObject {
             // Phase 9: Preserve this bundle for future delta patches
             let persistentBundle = aetherDir.appendingPathComponent("updates/Aether-bundle-current.tar.gz")
             try? fileManager.removeItem(at: persistentBundle)
-            try? fileManager.copyItem(at: currentBundle, to: persistentBundle)
+            try? fileManager.copyItem(at: tarballPath, to: persistentBundle)
             
             // 5. Success
             updateStatus("Update complete!")
