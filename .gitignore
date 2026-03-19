@@ -70,3 +70,5 @@ walkthrough.md
 .gemini/
 brain/
 **/conductor
+**/.claude
+**/CLAUDE.md

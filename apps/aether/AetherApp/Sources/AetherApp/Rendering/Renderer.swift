@@ -131,25 +131,44 @@ class TerminalRenderer: NSObject, MTKViewDelegate {
         self.forceNextFrame = true
     }
     
+    /// Recreate the font atlas when the display scale factor changes (e.g. moving window
+    /// from Retina laptop to external monitor or vice versa). This re-rasterizes all glyphs
+    /// at the new display's native resolution for sharp text.
+    func recreateFontAtlasIfNeeded(newScale: CGFloat) {
+        let currentAtlasScale = fontAtlas.scale
+        // Only recreate if scale actually changed (with tolerance for float comparison)
+        guard abs(newScale - currentAtlasScale) > 0.01 else { return }
+
+        do {
+            let fontConfig = ConfigManager.shared.config.font
+            self.fontAtlas = try FontAtlas(device: device, fontName: fontConfig.family, fontSize: CGFloat(fontConfig.size), scale: newScale)
+            print("Renderer: Font atlas recreated for new scale \(currentAtlasScale) -> \(newScale)")
+            forceNextFrame = true
+        } catch {
+            print("Renderer: Failed to recreate font atlas for scale \(newScale): \(error)")
+        }
+    }
+
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
         if size.width == 0 || size.height == 0 { return }
-        
+
         // Log thread to see if this is Main
         print("Renderer: mtkView drawableSizeWillChange to \(size) on thread: \(Thread.current.isMainThread ? "Main" : "Background")")
-        
+
         session?.lock.lock()
         defer { session?.lock.unlock() }
-        
+
         viewportSize = SIMD2<Float>(Float(size.width), Float(size.height))
         // Calculate scale factor: drawable pixels / view points
         let viewWidth = view.bounds.width
         if viewWidth > 0 {
             scaleFactor = Float(size.width / viewWidth)
         }
+
         // Update Viewport State Only
         // WE DO NOT CALL recalculateGridSizeInternal (aether_resize) HERE!
         // That is now exclusively handled by resize() on the background thread.
-        
+
         // Force a redraw so the terminal repaints with the new viewport/scale
         forceNextFrame = true
         if scrollState.viewportOffset == 0 {
@@ -157,7 +176,7 @@ class TerminalRenderer: NSObject, MTKViewDelegate {
                  aether_scroll_to(terminal, 0)
              }
         }
-        
+
         // Force a redraw so the terminal repaints with the new grid dimensions
         forceNextFrame = true
     }
@@ -165,18 +184,21 @@ class TerminalRenderer: NSObject, MTKViewDelegate {
     // Thread-safe resize called from TerminalView (possibly background thread)
     func resize(drawableSize size: CGSize, viewWidth: CGFloat) {
         if size.width == 0 || size.height == 0 { return }
-        
+
         print("Renderer: resize to \(size) on thread: \(Thread.current.isMainThread ? "Main" : "Background")")
-        
+
         session?.lock.lock()
         defer { session?.lock.unlock() }
-        
+
         viewportSize = SIMD2<Float>(Float(size.width), Float(size.height))
-        
+
         if viewWidth > 0 {
             scaleFactor = Float(size.width / viewWidth)
         }
-        
+
+        // Recreate font atlas if display scale changed (e.g. moved to external monitor)
+        recreateFontAtlasIfNeeded(newScale: CGFloat(scaleFactor))
+
         recalculateGridSizeInternal()
         
         // Force a full clear/redraw on resize to prevent "garbage" text/artifacts
@@ -558,8 +580,11 @@ class TerminalRenderer: NSObject, MTKViewDelegate {
                                 // This is required for column alignment (ls, tables, etc.).
                                 let glyphCol = c + UInt32(charIdx)
                                 let cellX = Float(glyphCol) * cw + padX
-                                let gx = cellX + glyphInfo.bearingX * ratio
-                                let gy = y + ascentScaled - (glyphInfo.bearingY * ratio + glyphH)
+                                // Snap glyph positions to pixel grid for sharp rendering.
+                                // Glyphs are rasterized at exact Retina resolution, so aligning
+                                // to integer pixel coordinates prevents subpixel blur.
+                                let gx = round(cellX + glyphInfo.bearingX * ratio)
+                                let gy = round(y + ascentScaled - (glyphInfo.bearingY * ratio + glyphH))
                                 
                                 let inst = GlyphInstance(
                                     position: SIMD2<Float>(gx, gy),
