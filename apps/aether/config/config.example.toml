@@ -58,3 +58,9 @@ restore_shortcut = "cmd+shift+r"
 
 [terminal]
 scrollback_limit = 50000
+
+[update]
+enabled = true
+check_interval = 3600
+server_url = "https://api.hackmist.tech"
+channel = "stable"
