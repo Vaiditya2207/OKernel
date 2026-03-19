@@ -1,0 +1,23 @@
+flowchart TD
+    A([App Launch]) --> B{update.enabled?}
+    B -- No --> Z([No-op])
+    B -- Yes --> D["GET /aether/latest"]
+    D --> E{Reachable?}
+    E -- No --> D
+    E -- Yes --> G{New version?}
+    G -- No --> H([Up to date])
+    G -- Yes --> I["Show badge"]
+    I --> K{User clicks?}
+    K -- Yes --> M["Download bundle"]
+    M --> P{OK + Valid?}
+    P -- No --> M
+    P -- Yes --> T{"Restart now?"}
+    T -- Later --> U["Badge: Restart to Update"]
+    T -- Now --> V["Backup -> Extract -> Codesign"]
+    V --> Y{Install OK?}
+    Y -- No --> AA[Restore backup]
+    Y -- Yes --> AC["Relaunch app"]
+    AC --> AD{"Pending update?"}
+    AD -- Yes --> AE["Logo + What's New"]
+    AD -- No --> AF([Terminal])
+    AE --> AF

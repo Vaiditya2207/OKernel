@@ -1,0 +1,954 @@
+\documentclass[11pt, a4paper]{article}
+
+% ──────────────────────────────────────────────
+% Packages
+% ──────────────────────────────────────────────
+\usepackage{fontspec}
+\usepackage[margin=1in, top=1in, bottom=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{adjustbox}
+\usepackage{caption}
+\usepackage{draftwatermark}
+\SetWatermarkText{OKernel}
+\SetWatermarkScale{1.2}
+\SetWatermarkColor[gray]{0.88}
+
+% ──────────────────────────────────────────────
+% Fonts
+% ──────────────────────────────────────────────
+\setmainfont{Helvetica Neue}
+\setmonofont{Menlo}[Scale=0.85]
+
+% ──────────────────────────────────────────────
+% Colors (Dracula-inspired accents)
+% ──────────────────────────────────────────────
+\definecolor{accentblue}{HTML}{6272A4}
+\definecolor{accentpurple}{HTML}{BD93F9}
+\definecolor{accentgreen}{HTML}{50FA7B}
+\definecolor{accentorange}{HTML}{FFB86C}
+\definecolor{accentred}{HTML}{FF5555}
+\definecolor{codebg}{HTML}{F5F5F5}
+\definecolor{codeframe}{HTML}{DDDDDD}
+\definecolor{sectioncolor}{HTML}{2D3748}
+\definecolor{linkblue}{HTML}{3B82F6}
+
+% ──────────────────────────────────────────────
+% Hyperref
+% ──────────────────────────────────────────────
+\hypersetup{
+    colorlinks=true,
+    linkcolor=accentblue,
+    urlcolor=linkblue,
+    citecolor=accentblue,
+    pdfauthor={OKernel Architecture Team},
+    pdftitle={Aether Auto-Update System - Architecture Plan},
+    pdfsubject={In-Application Auto-Update Architecture},
+}
+
+% ──────────────────────────────────────────────
+% Code Listings
+% ──────────────────────────────────────────────
+\lstset{
+    backgroundcolor=\color{codebg},
+    basicstyle=\ttfamily\scriptsize,
+    breaklines=true,
+    breakatwhitespace=false,
+    frame=single,
+    rulecolor=\color{codeframe},
+    framesep=4pt,
+    tabsize=2,
+    showstringspaces=false,
+    captionpos=b,
+    aboveskip=8pt,
+    belowskip=8pt,
+    xleftmargin=4pt,
+    xrightmargin=4pt,
+    keywordstyle=\color{accentpurple}\bfseries,
+    stringstyle=\color{accentgreen},
+    commentstyle=\color{accentblue}\itshape,
+}
+
+\lstdefinelanguage{swift}{
+    keywords={struct, class, var, let, func, enum, case, static, import, return, guard, if, else, init, self, true, false, nil, @Published, @ObservedObject},
+    morestring=[b]",
+    morecomment=[l]{//},
+    morecomment=[s]{/*}{*/},
+}
+
+\lstdefinelanguage{json}{
+    morestring=[b]",
+    literate=
+     *{:}{{{\color{accentblue}:}}}{1}
+      {,}{{{\color{accentblue},}}}{1}
+      {\{}{{{\color{accentblue}\{}}}{1}
+      {\}}{{{\color{accentblue}\}}}}{1}
+      {[}{{{\color{accentblue}[}}}{1}
+      {]}{{{\color{accentblue}]}}}{1},
+}
+
+% ──────────────────────────────────────────────
+% Section Formatting
+% ──────────────────────────────────────────────
+\titleformat{\section}
+  {\Large\bfseries\color{sectioncolor}}
+  {\thesection.}{0.5em}{}[\vspace{-4pt}\textcolor{accentblue}{\rule{\columnwidth}{1pt}}]
+
+\titleformat{\subsection}
+  {\large\bfseries\color{sectioncolor}}
+  {\thesubsection}{0.5em}{}
+
+\titleformat{\subsubsection}
+  {\normalsize\bfseries\color{accentblue}}
+  {\thesubsubsection}{0.5em}{}
+
+\titlespacing*{\section}{0pt}{16pt}{8pt}
+\titlespacing*{\subsection}{0pt}{12pt}{4pt}
+\titlespacing*{\subsubsection}{0pt}{8pt}{4pt}
+
+% ──────────────────────────────────────────────
+% Header / Footer
+% ──────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textcolor{accentblue}{Aether Auto-Update Architecture}}
+\fancyhead[R]{\small\textcolor{accentblue}{OKernel}}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\headrule}{\hbox to\headwidth{\color{accentblue}\leaders\hrule height \headrulewidth\hfill}}
+
+% ──────────────────────────────────────────────
+% Custom Commands
+% ──────────────────────────────────────────────
+\newcommand{\fullwidthfig}[3]{%
+  \begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth,height=0.82\textheight,keepaspectratio]{#1}
+    \caption{#2}
+    \label{fig:#3}
+  \end{figure}
+}
+
+\newcommand{\inlinecode}[1]{\texttt{\small\colorbox{codebg}{#1}}}
+
+% ──────────────────────────────────────────────
+% Document
+% ──────────────────────────────────────────────
+\begin{document}
+
+% ──────────────────────────────────────────────
+% TITLE PAGE (full width)
+% ──────────────────────────────────────────────
+\thispagestyle{empty}
+
+\vspace*{2cm}
+
+\begin{center}
+
+{\fontsize{14}{16}\selectfont\textcolor{accentblue}{\textbf{OKERNEL ENGINEERING}}}
+
+\vspace{0.3cm}
+\textcolor{accentblue}{\rule{0.6\textwidth}{1.5pt}}
+
+\vspace{1.5cm}
+
+{\fontsize{28}{34}\selectfont\textbf{Aether Auto-Update System}}
+
+\vspace{0.5cm}
+
+{\fontsize{16}{20}\selectfont\textcolor{sectioncolor}{Architecture \& Implementation Plan}}
+
+\vspace{2cm}
+
+{\fontsize{12}{16}\selectfont\textcolor{accentblue}{In-Application Auto-Update for Aether Terminal Emulator\\Without Reinstallation or Gatekeeper Re-Approval}}
+
+\vspace{3cm}
+
+\begin{tabular}{rl}
+\textbf{Status:} & Proposed \\[4pt]
+\textbf{Author:} & OKernel Architecture Team \\[4pt]
+\textbf{Date:} & March 19, 2026 \\[4pt]
+\textbf{Version:} & 1.0 \\[4pt]
+\textbf{Classification:} & Internal Engineering Document \\[4pt]
+\textbf{Repository:} & \texttt{Vaiditya2207/OKernel} \\[4pt]
+\textbf{Component:} & \texttt{apps/aether} \\
+\end{tabular}
+
+\vfill
+
+\textcolor{accentblue}{\rule{0.6\textwidth}{0.5pt}}
+
+\vspace{0.3cm}
+{\small\textcolor{accentblue}{OKernel --- Cycle-Accurate Execution Visualization Platform}}\\
+{\small\textcolor{accentblue}{\texttt{https://github.com/Vaiditya2207/OKernel}}}
+
+\end{center}
+
+\newpage
+
+% ──────────────────────────────────────────────
+% TABLE OF CONTENTS
+% ──────────────────────────────────────────────
+\thispagestyle{empty}
+\tableofcontents
+\newpage
+
+% ──────────────────────────────────────────────
+% BODY (two column)
+% ──────────────────────────────────────────────
+\setcounter{page}{1}
+
+% ══════════════════════════════════════════════
+\section{Executive Summary}
+\label{sec:executive-summary}
+
+The system enables Aether to check for updates, download new versions, and apply them \textbf{without reinstalling} --- avoiding macOS Gatekeeper re-approval. The update replaces the internals of the existing \texttt{.app} bundle in-place, requiring only an app restart. Users have full control via a config toggle in \inlinecode{\textasciitilde/.config/aether/config.json} or \inlinecode{config.toml}.
+
+\subsection{Key Principles}
+
+\begin{itemize}[nosep, leftmargin=*]
+  \item \textbf{Zero friction} --- one-click update from inside the app
+  \item \textbf{No Gatekeeper} --- in-place bundle patching, not a new install
+  \item \textbf{User control} --- config toggle to enable/disable entirely
+  \item \textbf{Resilient} --- backup before install, rollback on failure
+  \item \textbf{Theme-aware} --- all UI matches the user's chosen theme
+\end{itemize}
+
+
+% ══════════════════════════════════════════════
+\section{Why This Works Without Gatekeeper}
+\label{sec:gatekeeper}
+
+macOS Gatekeeper quarantine is applied to the \textbf{outer \texttt{.app} bundle} when first downloaded/opened. Once the user approves it, the \texttt{com.apple.quarantine} extended attribute is cleared. Replacing files \textit{inside} the bundle (executables, frameworks, resources) does \textbf{not} re-trigger Gatekeeper --- the approval lives on the \texttt{.app} directory itself.
+
+\textbf{Critical constraint:} The bundle must be re-signed ad-hoc after patching. The \texttt{codesign} CLI is available on all macOS systems. This is the same technique used by Sparkle, VS Code, and iTerm2.
+
+\begin{lstlisting}[title=Gatekeeper Behavior]
+[YES] First install from DMG
+        -> User approves once
+[YES] In-place binary replace
+        -> No re-approval needed
+[YES] Ad-hoc re-sign after patch
+        -> codesign --force --deep --sign -
+[NO]  New .app from new DMG
+        -> Gatekeeper triggers again
+           (we avoid this)
+\end{lstlisting}
+
+
+% ══════════════════════════════════════════════
+\section{System Architecture}
+\label{sec:architecture}
+
+The auto-update system spans three domains: the \textbf{SysCore backend} (artifact storage + API), the \textbf{Aether client} (check/download/install), and \textbf{GitHub Actions CI/CD} (build + publish).
+
+\fullwidthfig{diagrams/architecture-light.png}{System architecture showing the three domains: Aether client, SysCore backend, and GitHub Actions CI/CD. Arrows indicate data flow for version checks, downloads, and artifact publishing.}{architecture}
+
+\subsection{Component Responsibilities}
+
+\begin{tabularx}{\columnwidth}{lX}
+\toprule
+\textbf{Component} & \textbf{Role} \\
+\midrule
+SysCore API & Serves version metadata and bundle tarballs \\
+UpdateManager & Client-side singleton owning the full update lifecycle \\
+UpdateBadgeView & Title bar indicator when update is available \\
+UpdateModalView & Download/install progress overlay \\
+UpdateLetterView & Post-update ``What's New'' screen \\
+ConfigManager & Reads \texttt{update.enabled} and settings \\
+GitHub Actions & Builds \texttt{.tar.gz} bundles and publishes to SysCore \\
+\bottomrule
+\end{tabularx}
+
+
+% ══════════════════════════════════════════════
+\section{Backend Changes (SysCore)}
+\label{sec:backend}
+
+\subsection{New: GET /api/v1/aether/latest}
+
+Lightweight version-check endpoint. The existing \texttt{GET /api/v1/aether} returns ALL versions --- too heavy for periodic polling.
+
+\textbf{File:} \texttt{syscore/src/server/aether.rs}
+
+\begin{lstlisting}[language=json, title=Response]
+{
+  "version": "v0.4.0",
+  "description": "Performance improvements",
+  "changelog": "- Fixed M3 rendering\n
+                 - 2x faster startup",
+  "release_date": "2026-03-19T00:00:00Z",
+  "size": 28456000
+}
+\end{lstlisting}
+
+Reuses \texttt{list\_handlers} logic but returns only the first (latest by \texttt{release\_date}) entry. Returns \texttt{404} if no versions exist.
+
+\textbf{Route registration} in \texttt{lib.rs}:
+\begin{lstlisting}[language=C]
+.route("/api/v1/aether/latest",
+       get(latest_handler))
+\end{lstlisting}
+
+\subsection{New: GET /api/v1/aether/download/bundle}
+
+Serves a \texttt{.tar.gz} of the \textbf{app bundle contents} (not a DMG). A tarball can be extracted in-place --- a DMG requires mounting and manual drag-to-Applications.
+
+\begin{itemize}[nosep, leftmargin=*]
+  \item CI/CD creates both DMG (fresh installs) and \texttt{Aether-bundle-\{ver\}.tar.gz} (updates)
+  \item Tarball contains \texttt{Contents/} from inside \texttt{Aether.app/}
+  \item Stored alongside DMG in \texttt{storage/aether/\{version\}/}
+\end{itemize}
+
+\textbf{Query params:} \texttt{?v=VERSION} or \texttt{?v=latest}
+
+\textbf{Response:} Streamed \texttt{application/gzip} binary
+
+\subsection{Upload Handler Update}
+
+Modify \texttt{upload\_handler} to accept an optional second file field \texttt{bundle} (the \texttt{.tar.gz}). The \texttt{metadata.json} gains:
+
+\begin{lstlisting}[language=json, title=Extended Metadata]
+{
+  "version": "v0.4.0",
+  "filename": "Aether_Installer.dmg",
+  "size": 28456000,
+  "bundle_filename":
+    "Aether-bundle-v0.4.0.tar.gz",
+  "bundle_size": 24000000
+}
+\end{lstlisting}
+
+\subsection{CI/CD Change}
+
+\textbf{File:} \texttt{.github/workflows/aether-release.yml}
+
+After building the \texttt{.app} bundle:
+\begin{lstlisting}[language=bash]
+cd build_artifact
+tar -czf "Aether-bundle-${VERSION}.tar.gz" \
+    -C Aether.app Contents
+\end{lstlisting}
+
+Upload both DMG and tarball in the multipart POST to SysCore.
+
+
+% ══════════════════════════════════════════════
+\section{Configuration}
+\label{sec:config}
+
+\subsection{Config Schema}
+
+Add an \texttt{update} section to \texttt{AetherConfig}. Both JSON and TOML are supported.
+
+\begin{lstlisting}[language=json, title=JSON (~/.config/aether/config.json)]
+{
+  "update": {
+    "enabled": true,
+    "check_interval": 3600,
+    "server_url":
+      "https://api.hackmist.tech",
+    "channel": "stable"
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[title=TOML (~/.config/aether/config.toml)]
+[update]
+enabled = true
+check_interval = 3600
+server_url = "https://api.hackmist.tech"
+channel = "stable"
+\end{lstlisting}
+
+\subsection{Config Fields}
+
+\begin{tabularx}{\columnwidth}{lllX}
+\toprule
+\textbf{Field} & \textbf{Type} & \textbf{Default} & \textbf{Description} \\
+\midrule
+\texttt{enabled} & bool & \texttt{true} & Master toggle \\
+\texttt{check\_interval} & int & \texttt{3600} & Seconds between checks (min: 300) \\
+\texttt{server\_url} & string & hackmist & SysCore base URL \\
+\texttt{channel} & string & \texttt{stable} & Future: beta/nightly \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Swift Config Struct}
+
+\textbf{File:} \texttt{ConfigManager.swift}
+
+\begin{lstlisting}[language=swift]
+struct UpdateConfig: Codable {
+    var enabled: Bool = true
+    var checkInterval: Int = 3600
+    var serverUrl: String =
+      "https://api.hackmist.tech"
+    var channel: String = "stable"
+
+    enum CodingKeys: String, CodingKey {
+        case enabled
+        case checkInterval
+                       = "check_interval"
+        case serverUrl = "server_url"
+        case channel
+    }
+}
+\end{lstlisting}
+
+Add \inlinecode{var update: UpdateConfig = UpdateConfig()} to \texttt{AetherConfig}.
+
+
+% ══════════════════════════════════════════════
+\section{Client-Side Architecture}
+\label{sec:client}
+
+\subsection{UpdateManager}
+
+\textbf{File:} \texttt{Models/UpdateManager.swift}
+
+Singleton \texttt{ObservableObject} that owns the entire update lifecycle.
+
+\begin{lstlisting}[language=swift]
+class UpdateManager: ObservableObject {
+    static let shared = UpdateManager()
+
+    @Published var state: UpdateState
+                                   = .idle
+    @Published var availableVersion:
+                   AetherVersionInfo?
+    @Published var downloadProgress:
+                   Double = 0.0
+    @Published var statusMessage:
+                   String = ""
+
+    enum UpdateState {
+        case idle
+        case checking
+        case available(String)
+        case downloading
+        case readyToInstall
+        case installing
+        case failed(String)
+        case restartRequired
+    }
+
+    func checkForUpdates() { }
+    func downloadUpdate() { }
+    func applyUpdate() { }
+    func restartApp() { }
+    func schedulePeriodicCheck() { }
+    func cancelDownload() { }
+}
+\end{lstlisting}
+
+\subsection{Version Comparison}
+
+Semantic versioning comparison (major.minor.patch numerically). \textbf{Never string comparison.}
+
+\begin{lstlisting}[language=swift]
+struct SemanticVersion: Comparable {
+    let major: Int
+    let minor: Int
+    let patch: Int
+
+    init?(_ string: String) {
+        let cleaned = string
+            .hasPrefix("v")
+            ? String(string.dropFirst())
+            : string
+        let parts = cleaned
+            .split(separator: ".")
+            .compactMap { Int($0) }
+        guard parts.count == 3
+            else { return nil }
+        (major, minor, patch) =
+            (parts[0], parts[1], parts[2])
+    }
+
+    static func < (lhs: Self,
+                    rhs: Self) -> Bool {
+        (lhs.major, lhs.minor, lhs.patch)
+        < (rhs.major, rhs.minor, rhs.patch)
+    }
+}
+\end{lstlisting}
+
+\subsection{Network Resilience}
+
+\begin{itemize}[nosep, leftmargin=*]
+  \item \textbf{Timeout:} 10s for version check, 120s for download
+  \item \textbf{Background failure:} Silent retry at next interval
+  \item \textbf{Manual check failure:} Error in modal
+  \item \textbf{Download failure:} Error + retry button in modal
+\end{itemize}
+
+
+% ══════════════════════════════════════════════
+\section{Update State Machine}
+\label{sec:state-machine}
+
+The \texttt{UpdateManager} follows a strict state machine. Every UI element is driven by this state.
+
+\fullwidthfig{diagrams/state-machine-light.png}{Update state machine. Transitions are triggered by timer events, user actions, and network responses. The \texttt{Disabled} state is reached when \texttt{update.enabled = false} in config.}{state-machine}
+
+\subsection{State Transitions}
+
+\begin{tabularx}{\columnwidth}{llX}
+\toprule
+\textbf{From} & \textbf{To} & \textbf{Event} \\
+\midrule
+idle & checking & Timer / manual \\
+checking & available & Remote > Local \\
+checking & idle & Remote <= Local / error \\
+available & downloading & User clicks badge \\
+downloading & readyToInstall & 100\% complete \\
+downloading & failed & Error \\
+downloading & idle & User cancels \\
+readyToInstall & installing & ``Restart \& Update'' \\
+readyToInstall & restartPending & ``Later'' \\
+installing & restartRequired & Success \\
+installing & failed & Error \\
+failed & checking & Retry \\
+failed & idle & Dismiss \\
+\bottomrule
+\end{tabularx}
+
+
+% ══════════════════════════════════════════════
+\section{Complete Update Flow}
+\label{sec:update-flow}
+
+End-to-end flow from app launch to post-update experience:
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[height=0.88\textheight,keepaspectratio]{diagrams/update-flow-light.png}
+  \caption{Complete update flow from app launch through version check, download, in-place install, and post-update ``What's New'' experience.}
+  \label{fig:update-flow}
+\end{figure}
+
+
+% ══════════════════════════════════════════════
+\section{Install Sequence}
+\label{sec:install-sequence}
+
+Detailed interaction between all components during the update process:
+
+\fullwidthfig{diagrams/install-sequence-light.png}{Sequence diagram showing interactions between User, UpdateBadgeView, UpdateModalView, UpdateManager, SysCore API, Filesystem, and Aether.app during the update lifecycle.}{install-sequence}
+
+\subsection{Critical Path Steps}
+
+\begin{enumerate}[nosep, leftmargin=*]
+  \item Verify download integrity (file size matches \texttt{metadata.size})
+  \item Locate current app bundle: \texttt{Bundle.main.bundlePath}
+  \item \textbf{Backup:} Copy \texttt{Contents/} to \texttt{\textasciitilde/Library/Application Support/Aether/backup/}
+  \item \textbf{Extract:} \texttt{tar -xzf \{download\} -C \{bundle\}/}
+  \item \textbf{Re-sign:} \texttt{codesign --force --deep --sign - \{bundle\}}
+  \item Set \texttt{pendingUpdateVersion} in UserDefaults
+  \item Clean up download artifacts
+  \item \textbf{Restart:} \texttt{NSWorkspace.open(bundleURL)} + \texttt{NSApp.terminate()}
+\end{enumerate}
+
+\textbf{Why \texttt{tar} via Process?} Swift's built-in archive support is limited. \texttt{/usr/bin/tar} is on every macOS, handles \texttt{.tar.gz} natively. Run via \texttt{Process()}.
+
+\textbf{Why ad-hoc re-sign?} Replacing the executable invalidates the code signature. Ad-hoc signing creates a local signature without a Developer ID. This is what the current \texttt{build\_release.sh} already does.
+
+\textbf{Rollback:} If step 4 or 5 fails, restore from backup immediately.
+
+
+% ══════════════════════════════════════════════
+\section{UI Components}
+\label{sec:ui}
+
+\subsection{Title Bar Layout}
+
+The update badge sits on the right side of the existing 28pt custom title bar:
+
+\fullwidthfig{diagrams/titlebar-layout-light.png}{Title bar layout showing traffic lights (left), centered session title, and the update badge pill button (right). The tab bar sits below.}{titlebar}
+
+\subsection{Badge Specification}
+
+\begin{tabularx}{\columnwidth}{lX}
+\toprule
+\textbf{Property} & \textbf{Value} \\
+\midrule
+Shape & Capsule (fully rounded pill) \\
+Font & System 10pt, medium weight, monospaced \\
+Padding & Horizontal 8pt, vertical 3pt \\
+Background & Theme \texttt{selection} at 60\% opacity \\
+Text color & Theme \texttt{foreground} color \\
+Hover & Background opacity increases to 90\% \\
+Animation & 0.3s fade-in \\
+Content & ``Update v\{X.Y.Z\}'' + SF Symbol \\
+Visibility & Hidden when disabled or up-to-date \\
+\bottomrule
+\end{tabularx}
+
+\textbf{Integration point} in \texttt{AetherApp.swift} (lines 48--51):
+
+\begin{lstlisting}[language=swift]
+HStack {
+    Spacer()
+    if configManager.config.update.enabled {
+        UpdateBadgeView(
+            updateManager: updateManager,
+            theme: configManager.config.colors
+        )
+        .padding(.trailing, 8)
+    }
+}
+.frame(height: 28)
+\end{lstlisting}
+
+\subsection{Update Modal}
+
+Centered overlay with glass morphism styling.
+
+\fullwidthfig{diagrams/modal-states-light.png}{Modal states flow: Checking (spinner) leads to Downloading (progress bar), which leads to Ready to Install (restart/later buttons) or Failed (retry/dismiss). Installing shows a non-dismissable spinner.}{modal-states}
+
+\begin{tabularx}{\columnwidth}{lX}
+\toprule
+\textbf{Property} & \textbf{Value} \\
+\midrule
+Background & \texttt{VisualEffectView(.hudWindow)} + dark overlay \\
+Corner radius & 12pt \\
+Width & 320pt fixed \\
+Height & Intrinsic (content-driven) \\
+Buttons & Capsule, theme-aware colors \\
+Progress bar & Capsule, accent fill, secondary track \\
+Animation & Spring entrance, opacity exit \\
+Dismiss & Click outside (not during install) \\
+\bottomrule
+\end{tabularx}
+
+\subsection{State-Driven Modal Content}
+
+\begin{tabularx}{\columnwidth}{lX}
+\toprule
+\textbf{State} & \textbf{Content} \\
+\midrule
+\texttt{.checking} & Spinner + ``Checking...'' \\
+\texttt{.downloading} & Progress bar + size + Cancel \\
+\texttt{.readyToInstall} & ``Restart Now'' + ``Later'' \\
+\texttt{.installing} & Spinner + ``Do not quit'' \\
+\texttt{.failed} & Error + Retry + Dismiss \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Post-Update ``What's New'' View}
+
+Shown after restart from an update. Reuses \texttt{StartupView}'s visual language.
+
+\begin{enumerate}[nosep, leftmargin=*]
+  \item \textbf{Stage 1:} OKernel logo (2.5s, same as first-run)
+  \item \textbf{Stage 2:} ``What's New in Aether \{version\}'' --- changelog with glass styling
+  \item \textbf{[CONTINUE]} button leads to normal terminal
+\end{enumerate}
+
+\textbf{Trigger:} Check \texttt{pendingUpdateVersion} in UserDefaults on launch. If present, show this flow. Clear after display.
+
+
+% ══════════════════════════════════════════════
+\section{File System Layout}
+\label{sec:filesystem}
+
+\fullwidthfig{diagrams/file-tree-light.png}{File system layout across three locations: user config (\textasciitilde/.config/aether), application support (downloads and backups), and the Aether.app bundle that gets patched in-place.}{filesystem}
+
+\begin{lstlisting}[title=Directory Structure]
+~/Library/Application Support/Aether/
+  sessions.plist        (existing)
+  updates/
+    v0.4.0/
+      Aether-bundle-v0.4.0.tar.gz
+  backup/
+    Contents/           (pre-update copy)
+
+~/.config/aether/
+  config.json           (gains "update")
+  config.toml
+
+/Applications/Aether.app/
+  Contents/
+    MacOS/AetherApp     (replaced)
+    Frameworks/         (replaced)
+    Resources/          (replaced)
+    Info.plist          (updated)
+\end{lstlisting}
+
+
+% ══════════════════════════════════════════════
+\section{Security Considerations}
+\label{sec:security}
+
+\begin{tabularx}{\columnwidth}{lX}
+\toprule
+\textbf{Concern} & \textbf{Mitigation} \\
+\midrule
+MITM & HTTPS via \texttt{api.hackmist.tech}. ATS enforced. \\
+Tampered binary & Verify size vs \texttt{metadata.size}. Phase 2: SHA-256 checksum. \\
+Privilege escalation & No \texttt{sudo}. Writes only to own bundle + user dirs. \\
+Downgrade attack & Only update if remote > local (semver). \\
+Interrupted install & Backup exists. Restore on failure. \\
+Disk space & Check before download (need 2x update size). \\
+Read-only bundle & Detect. Show: ``Move Aether to writable location.'' \\
+Running from DMG & Detect read-only FS. Show: ``Install Aether first.'' \\
+\bottomrule
+\end{tabularx}
+
+
+% ══════════════════════════════════════════════
+\section{State Persistence}
+\label{sec:persistence}
+
+\begin{tabularx}{\columnwidth}{llX}
+\toprule
+\textbf{Key} & \textbf{Type} & \textbf{Purpose} \\
+\midrule
+\texttt{pendingUpdateVersion} & String? & Set before restart \\
+\texttt{pendingUpdateChangelog} & String? & Changelog for ``What's New'' \\
+\texttt{lastUpdateCheck} & Date? & Last successful check \\
+\texttt{updateDownloadedVersion} & String? & Completed download \\
+\bottomrule
+\end{tabularx}
+
+
+% ══════════════════════════════════════════════
+\section{Implementation Phases}
+\label{sec:phases}
+
+\fullwidthfig{diagrams/phase-gantt-light.png}{Gantt chart of 7 implementation phases: Foundation, Update Check, Title Bar Badge, Download + Modal, Install + Restart, Post-Update UX, and Polish + Tests.}{gantt}
+
+\subsection{Phase 1: Foundation}
+
+\begin{enumerate}[nosep, leftmargin=*]
+  \item Add \texttt{GET /api/v1/aether/latest} to \texttt{aether.rs}
+  \item Add \texttt{UpdateConfig} struct to \texttt{ConfigManager.swift}
+  \item Update \texttt{config.example.json} and \texttt{.toml}
+  \item Update config decoder with defaults
+\end{enumerate}
+
+\subsection{Phase 2: Update Check}
+
+\begin{enumerate}[nosep, leftmargin=*, start=5]
+  \item Create \texttt{UpdateManager.swift} singleton
+  \item Implement \texttt{checkForUpdates()} with URLSession
+  \item Implement semver comparison
+  \item Implement \texttt{schedulePeriodicCheck()} with Timer
+  \item Wire into \texttt{AetherApp.swift} on launch
+\end{enumerate}
+
+\subsection{Phase 3: Title Bar Badge}
+
+\begin{enumerate}[nosep, leftmargin=*, start=10]
+  \item Create \texttt{UpdateBadgeView.swift}
+  \item Integrate into title bar ZStack
+  \item Bind to \texttt{UpdateManager.state}
+\end{enumerate}
+
+\subsection{Phase 4: Download + Modal}
+
+\begin{enumerate}[nosep, leftmargin=*, start=13]
+  \item Create \texttt{UpdateModalView.swift}
+  \item Implement download with progress delegate
+  \item Implement \texttt{cancelDownload()}
+  \item Wire modal to badge tap + state
+\end{enumerate}
+
+\subsection{Phase 5: Install + Restart}
+
+\begin{enumerate}[nosep, leftmargin=*, start=17]
+  \item Implement \texttt{applyUpdate()} (backup, extract, re-sign)
+  \item Implement \texttt{restartApp()} (NSWorkspace + terminate)
+  \item Add tarball generation to CI/CD
+  \item Add bundle download endpoint
+\end{enumerate}
+
+\subsection{Phase 6: Post-Update Experience}
+
+\begin{enumerate}[nosep, leftmargin=*, start=21]
+  \item Create \texttt{UpdateLetterView.swift}
+  \item Check \texttt{pendingUpdateVersion} on launch
+  \item Show logo then changelog sequence
+\end{enumerate}
+
+\subsection{Phase 7: Polish + Tests}
+
+\begin{enumerate}[nosep, leftmargin=*, start=24]
+  \item Disk space check before download
+  \item Backup restoration on failure
+  \item SHA-256 checksum verification
+  \item Auto-cleanup of old downloads/backups
+  \item Write all unit, integration, and E2E tests
+\end{enumerate}
+
+
+% ══════════════════════════════════════════════
+\section{Test Plan}
+\label{sec:tests}
+
+\subsection{Unit Tests}
+
+\textbf{File:} \texttt{Tests/AetherAppTests/UpdateManagerTests.swift}
+
+\begin{tabularx}{\columnwidth}{lX}
+\toprule
+\textbf{ID} & \textbf{Verifies} \\
+\midrule
+U1 & \texttt{v1.0.0 > v0.9.9} (major) \\
+U2 & \texttt{v0.4.0 > v0.3.0} (minor) \\
+U3 & \texttt{v0.3.1 > v0.3.0} (patch) \\
+U4 & \texttt{v0.3.0 == v0.3.0} (no update) \\
+U5 & \texttt{v0.2.0 < v0.3.0} (no downgrade) \\
+U6 & Handles \texttt{v} prefix and bare versions \\
+U7 & Default \texttt{UpdateConfig.enabled = true} \\
+U8 & Disabled config prevents checks \\
+U9 & Interval < 300 clamped to 300 \\
+U10 & Missing \texttt{update} key uses defaults \\
+U11 & TOML \texttt{[update]} parses correctly \\
+U12 & Full state machine transitions \\
+U13 & Progress calculation correctness \\
+U14 & Backup path construction \\
+U15 & Download path construction \\
+\bottomrule
+\end{tabularx}
+
+\vspace{6pt}
+\textbf{File:} \texttt{syscore/tests/api\_tests.rs}
+
+\begin{tabularx}{\columnwidth}{lX}
+\toprule
+\textbf{ID} & \textbf{Verifies} \\
+\midrule
+U16 & \texttt{/latest} returns newest by date \\
+U17 & \texttt{/latest} returns 404 when empty \\
+U18 & Response has all required fields \\
+U19 & Bundle download serves gzip \\
+U20 & \texttt{?v=latest} resolves correctly \\
+\bottomrule
+\end{tabularx}
+
+\subsection{Integration Tests}
+
+\textbf{File:} \texttt{Tests/AetherAppTests/UpdateIntegrationTests.swift}
+
+\begin{tabularx}{\columnwidth}{lX}
+\toprule
+\textbf{ID} & \textbf{Verifies} \\
+\midrule
+I1 & Mock server check transitions to \texttt{.available} \\
+I2 & Same version stays \texttt{.idle} \\
+I3 & Unreachable server: no crash, retries \\
+I4 & Malformed JSON: graceful handling \\
+I5 & Download lands at correct path + size \\
+I6 & Cancel cleans up partial file \\
+I7 & Progress callbacks fire 0.0 to 1.0 \\
+I8 & Runtime toggle invalidates timer \\
+I9 & Pending update persisted in UserDefaults \\
+I10 & Backup + corrupt + restore works \\
+\bottomrule
+\end{tabularx}
+
+\subsection{End-to-End Tests}
+
+\textbf{File:} \texttt{Tests/AetherAppTests/UpdateE2ETests.swift}
+
+\textbf{Prerequisites:} Local SysCore on \texttt{127.0.0.1:3001}, two test \texttt{.tar.gz} bundles (v0.3.0 and v0.4.0).
+
+\subsubsection{test\_full\_update\_lifecycle}
+
+\begin{enumerate}[nosep, leftmargin=*]
+  \item \textbf{Setup:} Upload v0.3.0 and v0.4.0 to SysCore. Create temp \texttt{.app} bundle at v0.3.0.
+  \item \textbf{Check:} \texttt{checkForUpdates()} transitions to \texttt{.available("v0.4.0")}
+  \item \textbf{Download:} \texttt{downloadUpdate()} completes; file exists with correct size
+  \item \textbf{Install:} \texttt{applyUpdate()} updates Info.plist to v0.4.0; backup exists
+  \item \textbf{Verify:} \texttt{pendingUpdateVersion} set; ``What's New'' would trigger
+  \item \textbf{Cleanup:} Delete temp dirs and test versions
+\end{enumerate}
+
+\subsubsection{test\_update\_with\_disabled\_config}
+
+\begin{enumerate}[nosep, leftmargin=*]
+  \item Set \texttt{update.enabled = false}
+  \item Call \texttt{checkForUpdates()}
+  \item Assert: zero network requests (mock URLProtocol)
+  \item Assert: state == \texttt{.idle}, badge not visible
+\end{enumerate}
+
+\subsubsection{test\_update\_rollback\_on\_failure}
+
+\begin{enumerate}[nosep, leftmargin=*]
+  \item Create temp bundle (v0.3.0), download v0.4.0
+  \item Make bundle path read-only (simulate failure)
+  \item \texttt{applyUpdate()} results in \texttt{.failed}
+  \item Backup restored --- bundle still v0.3.0
+\end{enumerate}
+
+\subsubsection{test\_interrupted\_download\_cleanup}
+
+\begin{enumerate}[nosep, leftmargin=*]
+  \item Start download, cancel at ~50\%
+  \item Partial file cleaned up
+  \item Restart download from scratch succeeds
+\end{enumerate}
+
+
+% ══════════════════════════════════════════════
+\section{Risks and Mitigations}
+\label{sec:risks}
+
+\begin{tabularx}{\columnwidth}{lllX}
+\toprule
+\textbf{Risk} & \textbf{P} & \textbf{I} & \textbf{Mitigation} \\
+\midrule
+Read-only bundle path & M & H & Check write permission. Show error. \\
+Running from DMG & L & H & Detect RO filesystem. \\
+Partial extraction & L & H & Staging dir + atomic swap + backup. \\
+Misconfigured URL & L & M & Validate on load. Log. \\
+Slow connection & M & M & Show speed/ETA. Cancel/retry. \\
+Concurrent updates & L & M & File lock in updates dir. \\
+\bottomrule
+\end{tabularx}
+
+\small{P = Probability (L/M/H), I = Impact (L/M/H)}
+
+
+% ══════════════════════════════════════════════
+\section{File Change Summary}
+\label{sec:files}
+
+\begin{tabularx}{\columnwidth}{llX}
+\toprule
+\textbf{File} & \textbf{Act} & \textbf{Description} \\
+\midrule
+\texttt{aether.rs} & MOD & Add \texttt{latest\_handler}, bundle download \\
+\texttt{lib.rs} & MOD & Register new routes \\
+\texttt{ConfigManager.swift} & MOD & Add \texttt{UpdateConfig} \\
+\texttt{UpdateManager.swift} & NEW & Core update singleton \\
+\texttt{UpdateBadgeView.swift} & NEW & Title bar pill button \\
+\texttt{UpdateModalView.swift} & NEW & Download/install modal \\
+\texttt{UpdateLetterView.swift} & NEW & ``What's New'' screen \\
+\texttt{AetherApp.swift} & MOD & Wire manager, badge, modal \\
+\texttt{StartupView.swift} & MOD & Add update letter stage \\
+\texttt{config.example.json} & MOD & Add \texttt{update} section \\
+\texttt{config.example.toml} & MOD & Add \texttt{[update]} section \\
+\texttt{aether-release.yml} & MOD & Tarball generation \\
+\texttt{UpdateManagerTests} & NEW & Unit tests (U1--U15) \\
+\texttt{UpdateIntegrationTests} & NEW & Integration (I1--I10) \\
+\texttt{UpdateE2ETests} & NEW & End-to-end tests \\
+\texttt{api\_tests.rs} & MOD & Backend tests (U16--U20) \\
+\bottomrule
+\end{tabularx}
+
+
+\end{document}
