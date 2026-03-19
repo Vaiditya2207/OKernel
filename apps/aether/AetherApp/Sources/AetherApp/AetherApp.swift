@@ -6,6 +6,7 @@ import Combine
 struct AetherApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject var tabManager = TabManager()
+    @StateObject var updateManager = UpdateManager.shared
     @ObservedObject var configManager = ConfigManager.shared
     
     // First Run Experience
@@ -44,9 +45,12 @@ struct AetherApp: App {
                                         .id(session.id.uuidString + session.windowTitle) // Redraw on session/title change
                             }
                             
-                            // Custom Button Removed
+                            // Title Bar Buttons
                             HStack {
                                 Spacer()
+                                
+                                UpdateBadgeView()
+                                    .padding(.trailing, 10)
                             }
                             .frame(height: 28)
                         }
@@ -149,6 +153,9 @@ struct AetherApp: App {
                 
                 // Trigger async session loading — does NOT block main thread
                 SessionManager.shared.loadAsync()
+                
+                // Update management
+                updateManager.schedulePeriodicCheck()
             }
             .onReceive(SessionManager.shared.$isLoaded) { loaded in
                 guard loaded else { return }
