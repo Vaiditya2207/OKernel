@@ -16,7 +16,6 @@ struct UpdateModalView: View {
                     }
                 }
             
-            // Modal Container
             VStack(spacing: 0) {
                 // Header
                 HStack {
@@ -36,6 +35,30 @@ struct UpdateModalView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
+                .padding(.bottom, 8)
+                
+                // Channel Selector
+                HStack {
+                    Text("UPDATE CHANNEL")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(.secondary)
+                    
+                    Spacer()
+                    
+                    Picker("", selection: $configManager.config.update.channel) {
+                        Text("Stable").tag("stable")
+                        Text("Beta").tag("beta")
+                        Text("Dev").tag("dev")
+                    }
+                    .pickerStyle(.segmented)
+                    .scaleEffect(0.8)
+                    .frame(width: 180)
+                    .onChange(of: configManager.config.update.channel) { _ in
+                        configManager.saveConfig()
+                        updateManager.checkForUpdates()
+                    }
+                }
+                .padding(.horizontal, 20)
                 .padding(.bottom, 12)
                 
                 Divider().opacity(0.1)
