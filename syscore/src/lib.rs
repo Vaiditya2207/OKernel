@@ -8,6 +8,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use tower_http::limit::RequestBodyLimitLayer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use std::sync::Arc;
 use crate::docker::manager::ContainerManagerTrait;
@@ -28,6 +29,7 @@ pub fn create_app(container_manager: Arc<dyn ContainerManagerTrait>) -> Router {
         .route("/api/v1/aether", get(list_handlers).post(upload_handler))
         .route("/api/v1/aether/download", get(download_handler))
         .route("/ws/stream", get(websocket_handler))
+        .layer(RequestBodyLimitLayer::new(50 * 1024 * 1024)) // 50MB limit for Aether uploads
         .layer(
             tower_http::cors::CorsLayer::new()
                 .allow_origin([
