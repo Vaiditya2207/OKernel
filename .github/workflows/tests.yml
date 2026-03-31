@@ -14,8 +14,6 @@ jobs:
   test-web:
     name: Web Tests (Unit & E2E)
     runs-on: ubuntu-latest
-    env:
-      HOME: /root
     defaults:
       run:
         working-directory: apps/web
