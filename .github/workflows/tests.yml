@@ -14,8 +14,6 @@ jobs:
   test-web:
     name: Web Tests (Unit & E2E)
     runs-on: ubuntu-latest
-    container:
-      image: mcr.microsoft.com/playwright:v1.58.2-jammy
     env:
       HOME: /root
     defaults:
@@ -36,8 +34,8 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # The container image already includes Playwright browsers and dependencies.
-      # We skip the long-running 'npx playwright install --with-deps' step.
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
 
       - name: Run Unit Tests
         run: npm test -- --run
