@@ -1,48 +1,54 @@
-Title: 🛡️ CRITICAL Arbitrary File Write: Unsanitized filename in Aether version upload handler
+Title: 🛡️ CRITICAL Denial of Service: Unbounded Execution of Untrusted Code via `/api/execute`
 
 🚨 Severity
 CRITICAL
 
 💡 Description
-The `upload_handler` function in `syscore/src/server/aether.rs` contains an Arbitrary File Write vulnerability due to the lack of sanitization on the `filename` provided in the multipart form data.
-In Rust, `std::path::PathBuf::join` replaces the entire base path if the appended string is an absolute path. The `filename` extracted from `multipart.next_field()` is directly joined to `version_dir`:
+The `syscore/src/docker/manager.rs` module manages the execution of untrusted user-submitted code in Docker containers. In the `execute` method, the system initiates a Docker container and waits for its execution to complete:
 
 ```rust
-// syscore/src/server/aether.rs
-let file_path = version_dir.join(&filename);
-tokio_fs::write(&file_path, &file_bytes).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+// syscore/src/docker/manager.rs (lines ~227)
+let wait_res = self.docker.wait_container::<String>(&id, None).next().await;
 ```
 
-Because `filename` is attacker-controlled and unsanitized, an attacker can provide an absolute path (e.g., `/etc/passwd` or `/root/.ssh/authorized_keys`) as the `filename`. `PathBuf::join` will discard the `version_dir` and write the uploaded file contents directly to the attacker-specified absolute path on the host filesystem.
+This `await` call lacks any explicit timeout mechanism. Since the user can submit arbitrary code via the `/api/execute` endpoint (handled in `syscore/src/server/routes.rs`), an attacker can submit code that runs indefinitely, such as an infinite loop (`while True: pass` in Python).
+
+Because the system blocks forever waiting on this container to finish, it leaves the container running continuously. This consumes memory, CPU, and keeps a connection and tokio task open indefinitely. Repeated submissions will quickly exhaust server resources, leading to a complete Denial of Service (DoS) for the entire application.
 
 🎯 Potential Impact
-An authenticated attacker (even using the weak default `AETHER_UPLOAD_KEY` of "update_me_please") can overwrite arbitrary files on the system with the permissions of the user running the `syscore` backend service. This can lead to Remote Code Execution (RCE) by overwriting `.ssh/authorized_keys`, cron jobs, or system binaries, leading to complete system compromise.
+An unauthenticated attacker can trivially exhaust the server's compute resources (memory, CPU, worker threads, and Docker container limits) by submitting multiple execution payloads that loop infinitely. This will render the `/api/execute` endpoint, and potentially the entire `syscore` backend service, unresponsive to legitimate users.
 
 🛠️ Steps to Reproduce
 1. Start the `syscore` backend service.
-2. Construct a multipart POST request to the `/api/v1/aether` upload endpoint.
-3. Provide the default authentication header: `Authorization: Bearer update_me_please`.
-4. Include form fields for `version` (e.g., `1.0.0`), `description`, and `changelog`.
-5. Include a file upload field with the name `file`. Set the filename parameter in the Content-Disposition header to an absolute path, such as `/tmp/pwned.txt`.
-6. Send the request.
-7. Observe that the file `pwned.txt` is created in `/tmp` containing the uploaded payload, instead of within the intended `storage/aether/1.0.0/` directory.
+2. Send an HTTP POST request to the `/api/execute` endpoint with an infinite loop payload:
+   ```json
+   {
+       "language": "python",
+       "code": "while True:\n    pass\n"
+   }
+   ```
+3. Observe that the HTTP request never returns a response.
+4. Check the host system's running Docker containers (`docker ps`). Notice the `okernel-job-<uuid>` container remains running indefinitely, utilizing 100% of its allocated CPU.
+5. Send several more identical requests. The host's resources will eventually be completely exhausted.
 
 ✅ Recommended Remediation
-Implement strict path sanitization for the `filename` extracted from the multipart request before using it with `PathBuf::join`.
-1. Reject any filename containing path separators (`/` or `\`).
-2. Alternatively, extract only the final file component using `std::path::Path::new(&filename).file_name()`.
-3. Ensure the resolved path remains within the intended storage directory bounds.
+Implement an explicit overarching timeout for the container execution wait step using `tokio::time::timeout`. If the execution exceeds a reasonable timeframe (e.g., 5 or 10 seconds), forcefully kill and remove the container to reclaim resources.
 
 Example fix:
 ```rust
-let safe_filename = std::path::Path::new(&filename)
-    .file_name()
-    .and_then(|name| name.to_str())
-    .ok_or((StatusCode::BAD_REQUEST, "Invalid filename".to_string()))?;
+use std::time::Duration;
+use tokio::time::timeout;
 
-let file_path = version_dir.join(safe_filename);
+let wait_future = self.docker.wait_container::<String>(&id, None).next();
+
+if let Ok(Some(Ok(res))) = timeout(Duration::from_secs(10), wait_future).await {
+    tracing::debug!("[Job {}] Container exited with code {}", job_id, res.status_code);
+} else {
+    tracing::warn!("[Job {}] Container execution timed out or failed to wait. Forcing cleanup.", job_id);
+    let _ = self.docker.stop_container(&id, Some(bollard::container::StopContainerOptions { t: 0 })).await;
+}
 ```
 
 🔗 References
-- Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
-- OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+- OWASP Top 10 - Security Misconfiguration (Resource Exhaustion): https://owasp.org/www-project-top-ten/
+- Tokio Timeouts: https://docs.rs/tokio/latest/tokio/time/fn.timeout.html
