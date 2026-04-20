@@ -39,6 +39,8 @@ mkdir -p "$BUILD_DIR/$APP_NAME.app/Contents/Resources"
 # 4. Copy Binaries & Resources
 echo "Copying Binaries & Resources..."
 cp "AetherApp/.build/release/AetherApp" "$BUILD_DIR/$APP_NAME.app/Contents/MacOS/$APP_NAME"
+# Strip debug symbols to reduce binary size significantly
+strip "$BUILD_DIR/$APP_NAME.app/Contents/MacOS/$APP_NAME"
 
 # Copy SPM Resource Bundle (Critical for shaders/images)
 BUNDLE_DIR=$(find AetherApp/.build -name "AetherApp_AetherApp.bundle" | head -n 1)
@@ -124,6 +126,10 @@ create-dmg \
   --app-drop-link 450 160 \
   "$DMG_NAME" \
   "$BUILD_DIR/$APP_NAME.app"
+
+echo "Compressing DMG with LZMA..."
+hdiutil convert "$DMG_NAME" -format ULMO -o "Aether_Installer_Compressed.dmg"
+mv "Aether_Installer_Compressed.dmg" "$DMG_NAME"
 
 echo "Build Complete!"
 echo "App stored in: $BUILD_DIR/$APP_NAME.app"
