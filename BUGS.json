@@ -1,0 +1,114 @@
+[
+  {
+    "issue title": "Race Condition in Memory Allocation",
+    "severity": "High",
+    "affected files with line numbers": "apps/web/src/syscore/vm/Memory.ts:124",
+    "referenced code": "this.heapPtr = result.Ok.memory.heapPtr;",
+    "potential fix": "Implement a proper lock or queue for memory operations in the frontend, or ensure the backend handles concurrency and returns the allocated address directly instead of relying on a global heap pointer in the response that might be stale."
+  },
+  {
+    "issue title": "String Encoding Truncation in Memory Write",
+    "severity": "Medium",
+    "affected files with line numbers": "apps/web/src/syscore/vm/Memory.ts:92",
+    "referenced code": "this.localBuffer[addr + i] = str.charCodeAt(i);",
+    "potential fix": "Use TextEncoder to encode string to UTF-8 bytes before writing to memory."
+  },
+  {
+    "issue title": "String Decoding Assumption in Memory Read",
+    "severity": "Medium",
+    "affected files with line numbers": "apps/web/src/syscore/vm/Memory.ts:108",
+    "referenced code": "str += String.fromCharCode(char);",
+    "potential fix": "Use TextDecoder to decode UTF-8 bytes from memory."
+  },
+  {
+    "issue title": "Out of Bounds Memory Write Ignored",
+    "severity": "Medium",
+    "affected files with line numbers": "apps/web/src/syscore/vm/Memory.ts:95",
+    "referenced code": "this.localBuffer[addr + str.length] = 0;",
+    "potential fix": "Check if address is within bounds before writing. Throw RangeError if out of bounds."
+  },
+  {
+    "issue title": "Optimistic File Creation Ignores Server Errors",
+    "severity": "High",
+    "affected files with line numbers": "apps/web/src/syscore/vm/FileSystem.ts:38",
+    "referenced code": "if (!this.files.includes(name)) { this.files.push(name); }",
+    "potential fix": "Check response.ok from fetch before updating local state. Throw error if creation failed."
+  },
+  {
+    "issue title": "File Listing Ignores Server Errors",
+    "severity": "Medium",
+    "affected files with line numbers": "apps/web/src/syscore/vm/FileSystem.ts:25",
+    "referenced code": "catch (e) { console.error(\"FS API Error:\", e); } return this.files;",
+    "potential fix": "Handle non-200 responses. Propagate error or show UI indication that listing failed."
+  },
+  {
+    "issue title": "Zombie Process in Priority Scheduling",
+    "severity": "High",
+    "affected files with line numbers": "apps/web/src/syscore/cpu/algos/priority.ts:15",
+    "referenced code": "let highestPriorityId = readyQueue[0];",
+    "potential fix": "Filter readyQueue to ensure all IDs exist in processes map before processing. Handle empty valid queue case."
+  },
+  {
+    "issue title": "Inefficient Map Creation in Priority Algorithm",
+    "severity": "Low",
+    "affected files with line numbers": "apps/web/src/syscore/cpu/algos/priority.ts:7",
+    "referenced code": "const processMap = new Map<number, Process>();",
+    "potential fix": "Pass the map or index structure to the algorithm function instead of recreating it every call."
+  },
+  {
+    "issue title": "Inefficient Complexity in SJF Algorithm",
+    "severity": "Medium",
+    "affected files with line numbers": "apps/web/src/syscore/cpu/algos/sjf.ts:10",
+    "referenced code": "const process = processes.find(p => p.id === pid);",
+    "potential fix": "Use a Map or pre-indexed object for O(1) process lookup instead of O(N) array search inside the loop."
+  },
+  {
+    "issue title": "Inefficient Complexity in SRTF Algorithm",
+    "severity": "Medium",
+    "affected files with line numbers": "apps/web/src/syscore/cpu/algos/srtf.ts:10",
+    "referenced code": "const process = processes.find(p => p.id === pid);",
+    "potential fix": "Use a Map or pre-indexed object for O(1) process lookup."
+  },
+  {
+    "issue title": "Inefficient Ready Queue Filtering in Tick",
+    "severity": "Low",
+    "affected files with line numbers": "apps/web/src/syscore/cpu/index.ts:101",
+    "referenced code": "newState.readyQueue = newState.readyQueue.filter(id => id !== nextId);",
+    "potential fix": "Use a more efficient data structure for the queue (e.g. Deque) or index removal instead of filtering the whole array."
+  },
+  {
+    "issue title": "Inefficient Preemption Check in Tick",
+    "severity": "Low",
+    "affected files with line numbers": "apps/web/src/syscore/cpu/index.ts:61",
+    "referenced code": "const bestCandidate = selectProcess('SRTF', [...newState.readyQueue, processToRunId], newState.processes);",
+    "potential fix": "Avoid creating new array `[...newState.readyQueue, processToRunId]` every tick. Check current process against best in queue directly."
+  },
+  {
+    "issue title": "Unimplemented SysCore CLI Commands",
+    "severity": "Low",
+    "affected files with line numbers": "apps/web/src/syscore/terminal/commands/syscore_cli.tsx:35",
+    "referenced code": "syscore.ver : Check implementation version",
+    "potential fix": "Implement the advertised commands `syscore.ver` and `syscore.cpu.info`."
+  },
+  {
+    "issue title": "Memory Leak in useAuth Hook",
+    "severity": "Medium",
+    "affected files with line numbers": "apps/web/src/hooks/useAuth.ts:33",
+    "referenced code": "setUser(session?.user ?? null);",
+    "potential fix": "Use a mounted flag or AbortController to prevent state updates if the component unmounts while checking session."
+  },
+  {
+    "issue title": "Potential Logic Error in Dev Mode Auth Bypass",
+    "severity": "Low",
+    "affected files with line numbers": "apps/web/src/components/auth/AuthGuard.tsx:25",
+    "referenced code": "if (config.isDev && !location.pathname.startsWith('/root'))",
+    "potential fix": "Clarify logic. If intent is to bypass auth for all routes in dev, remove the path check. If intent is strictly public routes, ensure `/root` behaves as intended."
+  },
+  {
+    "issue title": "Memory Reset Clears Local Buffer Before API Success",
+    "severity": "Medium",
+    "affected files with line numbers": "apps/web/src/syscore/vm/Memory.ts:41",
+    "referenced code": "this.localBuffer.fill(0); await this.callApi('/reset', this.getState());",
+    "potential fix": "Perform API call first. Only clear local buffer if API call succeeds."
+  }
+]
