@@ -1,48 +1,37 @@
-Title: 🛡️ CRITICAL Arbitrary File Write: Unsanitized filename in Aether version upload handler
+Title: 🛡️ CRITICAL Broken Auth: Unauthenticated WebSocket endpoint for log streaming
 
 🚨 Severity
 CRITICAL
 
 💡 Description
-The `upload_handler` function in `syscore/src/server/aether.rs` contains an Arbitrary File Write vulnerability due to the lack of sanitization on the `filename` provided in the multipart form data.
-In Rust, `std::path::PathBuf::join` replaces the entire base path if the appended string is an absolute path. The `filename` extracted from `multipart.next_field()` is directly joined to `version_dir`:
-
+The WebSocket handler `websocket_handler` in `syscore/src/server/websocket.rs` completely lacks authentication and authorization checks. When a client connects to the `/ws/stream` endpoint, they can send a `subscribe:<job_id>` message to start receiving live logs and tracing data from any active container.
+There is no verification that the connecting user owns the `job_id` or is authenticated at all.
 ```rust
-// syscore/src/server/aether.rs
-let file_path = version_dir.join(&filename);
-tokio_fs::write(&file_path, &file_bytes).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+// syscore/src/server/websocket.rs
+// No auth middleware is applied to the route, and the handler blindly accepts the subscription:
+if text.starts_with("subscribe:") {
+    let job_id = text.trim_start_matches("subscribe:").trim();
+    tracing::info!("WS subscribing to job: {}", job_id);
+
+    if let Some(mut rx) = manager.subscribe(job_id).await {
+        // Streams data to any connected client
 ```
 
-Because `filename` is attacker-controlled and unsanitized, an attacker can provide an absolute path (e.g., `/etc/passwd` or `/root/.ssh/authorized_keys`) as the `filename`. `PathBuf::join` will discard the `version_dir` and write the uploaded file contents directly to the attacker-specified absolute path on the host filesystem.
-
 🎯 Potential Impact
-An authenticated attacker (even using the weak default `AETHER_UPLOAD_KEY` of "update_me_please") can overwrite arbitrary files on the system with the permissions of the user running the `syscore` backend service. This can lead to Remote Code Execution (RCE) by overwriting `.ssh/authorized_keys`, cron jobs, or system binaries, leading to complete system compromise.
+An unauthenticated attacker can connect to the WebSocket endpoint and subscribe to any active `job_id`. Since job IDs might be predictable or leaked (or the attacker could simply brute-force active UUIDs if they have enough throughput, though UUIDv4 makes this harder, the endpoint still exposes data without auth). If an attacker obtains a valid `job_id`, they can stream sensitive execution logs, source code snippets (via trace events), and memory contents of other users' executing code, leading to severe Data Leakage and privacy violations.
 
 🛠️ Steps to Reproduce
 1. Start the `syscore` backend service.
-2. Construct a multipart POST request to the `/api/v1/aether` upload endpoint.
-3. Provide the default authentication header: `Authorization: Bearer update_me_please`.
-4. Include form fields for `version` (e.g., `1.0.0`), `description`, and `changelog`.
-5. Include a file upload field with the name `file`. Set the filename parameter in the Content-Disposition header to an absolute path, such as `/tmp/pwned.txt`.
-6. Send the request.
-7. Observe that the file `pwned.txt` is created in `/tmp` containing the uploaded payload, instead of within the intended `storage/aether/1.0.0/` directory.
+2. Submit a valid code execution request to `/api/execute` to generate a valid `job_id` and start a container.
+3. Using a generic WebSocket client (e.g., `wscat` or a browser console), connect to `ws://localhost:3001/ws/stream` without any authentication headers or tokens.
+4. Send the message `subscribe:<job_id>` using the valid `job_id` obtained in step 2.
+5. Observe that the server begins streaming the container's execution logs and trace events to your unauthenticated WebSocket client.
 
 ✅ Recommended Remediation
-Implement strict path sanitization for the `filename` extracted from the multipart request before using it with `PathBuf::join`.
-1. Reject any filename containing path separators (`/` or `\`).
-2. Alternatively, extract only the final file component using `std::path::Path::new(&filename).file_name()`.
-3. Ensure the resolved path remains within the intended storage directory bounds.
-
-Example fix:
-```rust
-let safe_filename = std::path::Path::new(&filename)
-    .file_name()
-    .and_then(|name| name.to_str())
-    .ok_or((StatusCode::BAD_REQUEST, "Invalid filename".to_string()))?;
-
-let file_path = version_dir.join(safe_filename);
-```
+Implement authentication and authorization for the WebSocket endpoint.
+1. Require a valid authentication token (e.g., JWT) to be passed during the WebSocket handshake (via query parameters or a subprotocol, since standard HTTP headers are limited in browser WS APIs), or require the first message sent over the socket to be an authentication payload.
+2. Validate the token and ensure the user is authorized to access the requested `job_id`. The `ContainerManager` or the job state should track which user owns which `job_id`.
 
 🔗 References
-- Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
-- OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+- OWASP Broken Access Control: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+- Axum WebSocket Authentication Examples: https://github.com/tokio-rs/axum/tree/main/examples
