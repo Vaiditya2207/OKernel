@@ -1,4 +1,4 @@
-## 2024-05-18 - PathBuf::join Overwrite in Aether File Upload
-Vulnerability Pattern: Arbitrary File Write via absolute path injection in `multipart.next_field().file_name()`.
-Systemic Cause: The `upload_handler` blindly trusts the `filename` provided in the HTTP multipart request without sanitization. In Rust, `PathBuf::join` completely replaces the base path if the appended string is an absolute path, leading to out-of-bounds file writes.
-Auditor Note: Always check usages of `PathBuf::join` with user-supplied strings, especially those extracted from multipart uploads, headers, or query parameters. Look for missing sanitization of path separators and absolute paths before path concatenation.
+## 2024-04-18 - Path Traversal / Arbitrary File Write via PathBuf::join
+Vulnerability Pattern: Unsanitized user-provided filenames from multipart uploads are passed directly to `PathBuf::join`. In Rust, `PathBuf::join` replaces the entire path if the provided string is an absolute path (e.g., `/etc/passwd`).
+Systemic Cause: The upload handler in `syscore/src/server/aether.rs` assumes that multipart file names are safe relative paths, relying on `field.file_name()` without any validation or sanitization before appending to the storage directory.
+Auditor Note: Always check usages of `PathBuf::join` with user-controlled input. If the right-hand side is an absolute path, it overrides the left-hand base path. Rust's `Path::join` explicitly exhibits this behavior, making it a critical source of path traversal and arbitrary file write vulnerabilities.
