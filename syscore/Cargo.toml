@@ -37,7 +37,7 @@ regex = "1.0"
 dotenv = "0.15"
 
 # HTTP Client (Static Linking Fix)
-reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tokio-util = { version = "0.7", features = ["io"] }
 chrono = { version = "0.4", features = ["serde"] }
 
