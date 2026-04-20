@@ -1,48 +1,28 @@
-Title: 🛡️ CRITICAL Arbitrary File Write: Unsanitized filename in Aether version upload handler
+Title: 🛡️ CRITICAL Arbitrary File Write / Auth Bypass: Unsanitized multipart filenames and weak default API key in `/api/aether/upload`
 
 🚨 Severity
 CRITICAL
 
 💡 Description
-The `upload_handler` function in `syscore/src/server/aether.rs` contains an Arbitrary File Write vulnerability due to the lack of sanitization on the `filename` provided in the multipart form data.
-In Rust, `std::path::PathBuf::join` replaces the entire base path if the appended string is an absolute path. The `filename` extracted from `multipart.next_field()` is directly joined to `version_dir`:
+There are two chained vulnerabilities in the `upload_handler` function located in `syscore/src/server/aether.rs`:
 
-```rust
-// syscore/src/server/aether.rs
-let file_path = version_dir.join(&filename);
-tokio_fs::write(&file_path, &file_bytes).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-```
-
-Because `filename` is attacker-controlled and unsanitized, an attacker can provide an absolute path (e.g., `/etc/passwd` or `/root/.ssh/authorized_keys`) as the `filename`. `PathBuf::join` will discard the `version_dir` and write the uploaded file contents directly to the attacker-specified absolute path on the host filesystem.
+1. **Weak Default API Key (Broken Auth):** At line 314, `AETHER_UPLOAD_KEY` defaults to `"update_me_please"` if the environment variable is not set. This allows an attacker to easily guess the authorization token and bypass authentication completely.
+2. **Arbitrary File Write (Path Injection):** Starting at line 341, the filenames provided in the multipart request (`filename`, `bundle_filename`, `patch_filename`) are extracted directly using `field.file_name()`. These unsanitized strings are later used with `PathBuf::join()` (e.g., at line 400). In Rust, if the string passed to `PathBuf::join()` is an absolute path (e.g., `/root/.ssh/authorized_keys`), it completely replaces the base path. This allows an attacker to write uploaded contents to any location on the file system with the permissions of the application process.
 
 🎯 Potential Impact
-An authenticated attacker (even using the weak default `AETHER_UPLOAD_KEY` of "update_me_please") can overwrite arbitrary files on the system with the permissions of the user running the `syscore` backend service. This can lead to Remote Code Execution (RCE) by overwriting `.ssh/authorized_keys`, cron jobs, or system binaries, leading to complete system compromise.
+An unauthenticated attacker can upload arbitrary files to any location on the server. By overwriting sensitive files such as `/etc/shadow`, `/root/.ssh/authorized_keys`, or replacing application binaries, the attacker could easily achieve complete Remote Code Execution (RCE) and system takeover.
 
 🛠️ Steps to Reproduce
-1. Start the `syscore` backend service.
-2. Construct a multipart POST request to the `/api/v1/aether` upload endpoint.
-3. Provide the default authentication header: `Authorization: Bearer update_me_please`.
-4. Include form fields for `version` (e.g., `1.0.0`), `description`, and `changelog`.
-5. Include a file upload field with the name `file`. Set the filename parameter in the Content-Disposition header to an absolute path, such as `/tmp/pwned.txt`.
-6. Send the request.
-7. Observe that the file `pwned.txt` is created in `/tmp` containing the uploaded payload, instead of within the intended `storage/aether/1.0.0/` directory.
+1. Ensure the `AETHER_UPLOAD_KEY` environment variable is not set (or use the known `"update_me_please"` fallback).
+2. Send an HTTP POST request to the upload endpoint with the `Authorization: Bearer update_me_please` header.
+3. In the multipart form data, include a field named `file`, set its filename to an absolute path (e.g., `filename="/tmp/pwned.txt"`), and provide some arbitrary data as the file content.
+4. Also include the required `version` parameter in the multipart data (e.g., `version="1.0.0"`).
+5. Observe that the file is successfully created at `/tmp/pwned.txt` instead of within the intended `STORAGE_DIR/1.0.0` directory.
 
 ✅ Recommended Remediation
-Implement strict path sanitization for the `filename` extracted from the multipart request before using it with `PathBuf::join`.
-1. Reject any filename containing path separators (`/` or `\`).
-2. Alternatively, extract only the final file component using `std::path::Path::new(&filename).file_name()`.
-3. Ensure the resolved path remains within the intended storage directory bounds.
-
-Example fix:
-```rust
-let safe_filename = std::path::Path::new(&filename)
-    .file_name()
-    .and_then(|name| name.to_str())
-    .ok_or((StatusCode::BAD_REQUEST, "Invalid filename".to_string()))?;
-
-let file_path = version_dir.join(safe_filename);
-```
+1. **Remove Weak Defaults:** Remove the `.unwrap_or_else(|_| "update_me_please".to_string())` logic. If `AETHER_UPLOAD_KEY` is not present in the environment, the server should fail to start, or the endpoint should strictly deny all requests.
+2. **Sanitize Filenames:** Do not trust user-provided filenames. Either generate unique server-side names (e.g., using UUIDs) or extract only the final path component and sanitize it strictly (e.g., stripping out all path separators `\`, `/`, and `..` sequences) before using it in `PathBuf::join()`. Consider using crates like `sanitize-filename` to ensure safe file names.
 
 🔗 References
-- Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
-- OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+- [OWASP Path Traversal](https://owasp.org/www-community/attacks/Path_Traversal)
+- [Rust PathBuf::join Documentation](https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join)
