@@ -46,3 +46,42 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+---
+
+Title: 🛡️ CRITICAL Hardcoded Secret: Weak Default AETHER_UPLOAD_KEY in upload handler
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+In `syscore/src/server/aether.rs`, the `upload_handler` validates the `Authorization` header against the `AETHER_UPLOAD_KEY` environment variable. However, if the environment variable is not set, it defaults to a weak, hardcoded secret (`"update_me_please"`).
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+```
+
+This means that in any environment (including production) where the administrator fails to explicitly set the `AETHER_UPLOAD_KEY` environment variable, the system will silently fall back to using this well-known, hardcoded key.
+
+🎯 Potential Impact
+An unauthenticated attacker who knows this default key can authenticate to the `/api/v1/aether` upload endpoint. This allows them to upload arbitrary files or malicious Aether versions to the server. Combined with the previously documented Arbitrary File Write vulnerability in the same handler, this provides a trivial, unauthenticated path to complete system compromise (Remote Code Execution) for any instance relying on the default configuration.
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service without setting the `AETHER_UPLOAD_KEY` environment variable.
+2. Send a POST request to the `/api/v1/aether` upload endpoint.
+3. Include the default authentication header: `Authorization: Bearer update_me_please`.
+4. Observe that the request is successfully authenticated and processed, rather than being rejected with a 401 Unauthorized error.
+
+✅ Recommended Remediation
+Remove the fallback to the hardcoded secret. Instead, the application should fail securely if the critical environment variable is missing. It is preferable to fail at startup or return a 500 Internal Server Error (or 401) rather than silently permitting unauthenticated access.
+
+Example fix:
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY")
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "AETHER_UPLOAD_KEY not configured".to_string()))?;
+```
+
+🔗 References
+- OWASP Top 10 - A07:2021-Identification and Authentication Failures: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+- CWE-798: Use of Hard-coded Credentials: https://cwe.mitre.org/data/definitions/798.html
