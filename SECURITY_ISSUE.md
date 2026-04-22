@@ -46,3 +46,56 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+---
+
+Title: 🛡️ CRITICAL Denial of Service: Missing execution timeout in Docker container execution
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `execute` function in `syscore/src/docker/manager.rs` launches a Docker container to run untrusted code submitted by the user. However, when waiting for the container to finish, it calls `self.docker.wait_container::<String>(&id, None).next().await;` without any timeout mechanism.
+
+```rust
+// syscore/src/docker/manager.rs
+// 6. Wait for execution to finish
+let wait_res = self.docker.wait_container::<String>(&id, None).next().await;
+```
+
+If the submitted code contains an infinite loop or blocks indefinitely, the `wait_container` future will never resolve, keeping the execution task alive and the container running forever.
+
+🎯 Potential Impact
+An attacker can submit malicious code (e.g., `while True: pass` in Python) to the `/api/execute` endpoint. This code will run indefinitely in the Docker container. An attacker can repeatedly send these requests to exhaust system resources (CPU, Memory, and Docker container limits on the host system). This leads to a Denial of Service (DoS) where the backend is no longer able to process legitimate execution requests, and potentially crashes the entire host system due to resource exhaustion.
+
+🛠️ Steps to Reproduce
+1. Start the backend service.
+2. Send a POST request to `/api/execute` containing an infinite loop payload for Python (e.g., `while True: pass`).
+3. Observe that the request never completes and the backend holds the connection open indefinitely.
+4. Run `docker ps` on the host machine and observe that the container remains running without terminating.
+5. Send multiple such requests and observe host CPU/Memory usage increasing unbounded until the system crashes or becomes unresponsive.
+
+✅ Recommended Remediation
+Implement an explicit timeout when awaiting `wait_container` to ensure that execution tasks are guaranteed to finish and containers are terminated if they exceed the time limit.
+
+Example fix using `tokio::time::timeout`:
+```rust
+use tokio::time::{timeout, Duration};
+
+// ...
+
+let wait_future = self.docker.wait_container::<String>(&id, None).next();
+let wait_res = match timeout(Duration::from_secs(10), wait_future).await {
+    Ok(res) => res,
+    Err(_) => {
+        tracing::warn!("[Job {}] Execution timed out, killing container", job_id);
+        // Ensure container is stopped/killed before proceeding to cleanup
+        let _ = self.docker.kill_container(&id, None).await;
+        return Err("Execution timed out".to_string());
+    }
+};
+```
+
+🔗 References
+- Tokio Timeout documentation: https://docs.rs/tokio/latest/tokio/time/fn.timeout.html
+- OWASP DoS Resource Exhaustion: https://owasp.org/www-community/attacks/Denial_of_Service
