@@ -1,48 +1,39 @@
-Title: 🛡️ CRITICAL Arbitrary File Write: Unsanitized filename in Aether version upload handler
+Title: 🛡️ CRITICAL Injection: Arbitrary File Write via Unsanitized Filename in upload_handler
 
 🚨 Severity
 CRITICAL
 
 💡 Description
-The `upload_handler` function in `syscore/src/server/aether.rs` contains an Arbitrary File Write vulnerability due to the lack of sanitization on the `filename` provided in the multipart form data.
-In Rust, `std::path::PathBuf::join` replaces the entire base path if the appended string is an absolute path. The `filename` extracted from `multipart.next_field()` is directly joined to `version_dir`:
+The `upload_handler` in `syscore/src/server/aether.rs` contains a critical Arbitrary File Write vulnerability. Filenames extracted from multipart form data (`field.file_name()`) are completely unsanitized and are passed directly into `PathBuf::join` when constructing the final file path for saving uploaded files (`let file_path = version_dir.join(&filename);`).
 
-```rust
-// syscore/src/server/aether.rs
-let file_path = version_dir.join(&filename);
-tokio_fs::write(&file_path, &file_bytes).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-```
-
-Because `filename` is attacker-controlled and unsanitized, an attacker can provide an absolute path (e.g., `/etc/passwd` or `/root/.ssh/authorized_keys`) as the `filename`. `PathBuf::join` will discard the `version_dir` and write the uploaded file contents directly to the attacker-specified absolute path on the host filesystem.
+In Rust, the `PathBuf::join` behavior is such that if the appended string represents an absolute path, it entirely replaces the base path. This allows an attacker to bypass the intended `STORAGE_DIR` and write files anywhere on the system that the application process has write access to. Furthermore, relative path traversal sequences (e.g., `../../../`) are not mitigated.
 
 🎯 Potential Impact
-An authenticated attacker (even using the weak default `AETHER_UPLOAD_KEY` of "update_me_please") can overwrite arbitrary files on the system with the permissions of the user running the `syscore` backend service. This can lead to Remote Code Execution (RCE) by overwriting `.ssh/authorized_keys`, cron jobs, or system binaries, leading to complete system compromise.
+An attacker with upload privileges can write arbitrary files to any location on the file system accessible by the Axum application process. This can lead to Remote Code Execution (RCE) by overwriting executable code, configuration files, or SSH keys, potentially fully compromising the backend server.
 
 🛠️ Steps to Reproduce
-1. Start the `syscore` backend service.
-2. Construct a multipart POST request to the `/api/v1/aether` upload endpoint.
-3. Provide the default authentication header: `Authorization: Bearer update_me_please`.
-4. Include form fields for `version` (e.g., `1.0.0`), `description`, and `changelog`.
-5. Include a file upload field with the name `file`. Set the filename parameter in the Content-Disposition header to an absolute path, such as `/tmp/pwned.txt`.
-6. Send the request.
-7. Observe that the file `pwned.txt` is created in `/tmp` containing the uploaded payload, instead of within the intended `storage/aether/1.0.0/` directory.
+1. Start the Axum server locally (`cargo run` from `syscore`).
+2. Construct a multipart POST request to the upload endpoint using the required API key in the `Authorization` header.
+3. In the form data, include a file part, but intercept the request to change the `filename` attribute to an absolute path, for example: `filename="/tmp/pwned.txt"`.
+4. Provide valid `version` and `channel` text fields.
+5. Send the request.
+6. Observe that `pwned.txt` is created in `/tmp/` instead of the expected version subdirectory within `storage/aether`.
 
 ✅ Recommended Remediation
-Implement strict path sanitization for the `filename` extracted from the multipart request before using it with `PathBuf::join`.
-1. Reject any filename containing path separators (`/` or `\`).
-2. Alternatively, extract only the final file component using `std::path::Path::new(&filename).file_name()`.
-3. Ensure the resolved path remains within the intended storage directory bounds.
+Implement strict input sanitization on all user-supplied filenames before passing them to filesystem APIs. Use `std::path::Path::new(&filename).file_name()` to safely extract only the filename component, stripping any absolute paths or relative traversal characters.
 
-Example fix:
+Example fix in `upload_handler`:
 ```rust
+// Sanitize the filename extracted from the multipart field
 let safe_filename = std::path::Path::new(&filename)
     .file_name()
     .and_then(|name| name.to_str())
-    .ok_or((StatusCode::BAD_REQUEST, "Invalid filename".to_string()))?;
+    .ok_or((StatusCode::BAD_REQUEST, "Invalid filename format".to_string()))?;
 
+// Safely join the sanitized filename
 let file_path = version_dir.join(safe_filename);
 ```
 
 🔗 References
-- Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
-- OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+- [Rust std::path::PathBuf::join Documentation](https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join)
+- [OWASP Unrestricted File Upload Vulnerability](https://owasp.org/www-community/vulnerabilities/Unrestricted_File_Upload)
