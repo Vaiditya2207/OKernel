@@ -2,3 +2,7 @@
 Vulnerability Pattern: Arbitrary File Write via absolute path injection in `multipart.next_field().file_name()`.
 Systemic Cause: The `upload_handler` blindly trusts the `filename` provided in the HTTP multipart request without sanitization. In Rust, `PathBuf::join` completely replaces the base path if the appended string is an absolute path, leading to out-of-bounds file writes.
 Auditor Note: Always check usages of `PathBuf::join` with user-supplied strings, especially those extracted from multipart uploads, headers, or query parameters. Look for missing sanitization of path separators and absolute paths before path concatenation.
+## 2024-05-19 - Broken Auth via Fallback Defaults
+Vulnerability Pattern: Authentication bypass via predictable default fallback value (`"update_me_please"`) in environment variable extraction (`unwrap_or_else`).
+Systemic Cause: The application attempts to handle missing configuration gracefully instead of failing securely (fail-closed principle), inadvertently creating a backdoor when `AETHER_UPLOAD_KEY` is absent.
+Auditor Note: Systematically check for uses of `unwrap_or_else` or `unwrap_or` on environment variables representing secrets or credentials. Ensure they fail securely rather than supplying weak default fallbacks.
