@@ -46,3 +46,41 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+---
+
+Title: 🛡️ CRITICAL Broken Auth: Weak Default Credential for Aether Upload API
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Auth vulnerability due to a weak default fallback for the authentication key. If the `AETHER_UPLOAD_KEY` environment variable is not explicitly set, the system falls back to the hardcoded default `"update_me_please"`:
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+```
+
+This allows any attacker who knows this default key to bypass authentication on a sensitive API route intended for publishing new versions of the Aether application.
+
+🎯 Potential Impact
+An unauthorized user can publish malicious updates, bundles, or patches to the Aether application. This can lead to the distribution of malware to all clients that download the update, resulting in a widespread supply chain attack and complete compromise of end-user systems.
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service without setting the `AETHER_UPLOAD_KEY` environment variable.
+2. Construct a multipart POST request to the `/api/v1/aether` upload endpoint.
+3. Provide the weak default authentication header: `Authorization: Bearer update_me_please`.
+4. Include the necessary form fields (`version`, `file`, etc.).
+5. Send the request and observe that the payload is successfully accepted and published (HTTP 201 Created).
+
+✅ Recommended Remediation
+Remove the weak default fallback. The system should securely fail if the `AETHER_UPLOAD_KEY` environment variable is not set.
+
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY")
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "AETHER_UPLOAD_KEY is not configured".to_string()))?;
+```
+
+🔗 References
+- OWASP Broken Access Control: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+- CWE-1188: Initialization of a Resource with an Insecure Default: https://cwe.mitre.org/data/definitions/1188.html
