@@ -2,3 +2,7 @@
 Vulnerability Pattern: Arbitrary File Write via absolute path injection in `multipart.next_field().file_name()`.
 Systemic Cause: The `upload_handler` blindly trusts the `filename` provided in the HTTP multipart request without sanitization. In Rust, `PathBuf::join` completely replaces the base path if the appended string is an absolute path, leading to out-of-bounds file writes.
 Auditor Note: Always check usages of `PathBuf::join` with user-supplied strings, especially those extracted from multipart uploads, headers, or query parameters. Look for missing sanitization of path separators and absolute paths before path concatenation.
+## 2026-05-07 - Weak Default Fallback in Aether Upload
+Vulnerability Pattern: Broken Authentication / Hardcoded Secrets
+Systemic Cause: The `upload_handler` in `syscore/src/server/aether.rs` utilizes `unwrap_or_else` on the retrieval of the `AETHER_UPLOAD_KEY` environment variable, inserting a weak default credential `"update_me_please"` if the secret is missing from the environment. This ensures the endpoint is accessible even when not properly configured by an admin.
+Auditor Note: Always check for `unwrap_or_else` or `unwrap_or` calls on environment variables representing secrets or credentials. Ensure they fail securely rather than supplying weak default fallbacks.
