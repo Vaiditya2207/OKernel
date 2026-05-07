@@ -46,3 +46,44 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+Title: 🛡️ CRITICAL Broken Auth: Weak default fallback for Aether upload authentication
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` protects the Aether version upload endpoint with a static Bearer token. However, if the `AETHER_UPLOAD_KEY` environment variable is not set, the application falls back to a weak, hardcoded default password (`"update_me_please"`).
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+
+if auth_header != Some(&expected_key) {
+    return Err((StatusCode::UNAUTHORIZED, "Invalid or missing API Key".to_string()));
+}
+```
+
+This ensures that out of the box, or in environments where the administrator forgot to set the environment variable, the upload endpoint is effectively accessible to anyone who knows the default credential.
+
+🎯 Potential Impact
+An unauthenticated attacker can use the default credential `"update_me_please"` to bypass authentication on the `/api/v1/aether` upload endpoint. This allows them to upload arbitrary Aether versions and patches, which could then be downloaded and executed by unsuspecting users of the application, leading to a supply chain attack or Remote Code Execution (RCE) on client machines. Furthermore, when combined with the Path Traversal vulnerability in the same endpoint, the attacker can overwrite arbitrary files on the backend server.
+
+🛠️ Steps to Reproduce
+1. Ensure the `syscore` backend is running without the `AETHER_UPLOAD_KEY` environment variable set.
+2. Construct a multipart POST request to the `/api/v1/aether` upload endpoint.
+3. Provide the default authentication header: `Authorization: Bearer update_me_please`.
+4. Include valid multipart form data for an upload.
+5. Send the request and observe that it is accepted with a `201 Created` status code rather than rejected with `401 Unauthorized`.
+
+✅ Recommended Remediation
+Remove the weak default fallback. The application should fail securely if the `AETHER_UPLOAD_KEY` environment variable is missing, either by refusing to start or by securely rejecting all uploads.
+
+Example fix:
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY")
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Server misconfiguration: AETHER_UPLOAD_KEY not set".to_string()))?;
+```
+
+🔗 References
+- OWASP Broken Authentication: https://owasp.org/www-project-top-ten/2017/A2_2017-Broken_Authentication
