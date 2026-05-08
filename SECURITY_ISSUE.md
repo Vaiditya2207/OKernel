@@ -46,3 +46,42 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+Title: 🛡️ CRITICAL Broken Auth: Weak default fallback for AETHER_UPLOAD_KEY
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Authentication vulnerability due to a weak default fallback mechanism. When checking the authorization header against the expected API key, the system reads the `AETHER_UPLOAD_KEY` environment variable. If this variable is not set, it silently falls back to the hardcoded string `"update_me_please"`.
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+```
+
+🎯 Potential Impact
+If an administrator deploys the `syscore` backend service and forgets to set the `AETHER_UPLOAD_KEY` environment variable, an unauthorized attacker can trivially guess the default credential. They can then bypass authentication on the `/api/v1/aether` upload endpoint and upload malicious payloads or overwrite arbitrary files (compounding with the existing Arbitrary File Write vulnerability), leading to a complete system compromise.
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service without setting the `AETHER_UPLOAD_KEY` environment variable.
+2. Construct a multipart POST request to the `/api/v1/aether` upload endpoint.
+3. Provide the default authentication header: `Authorization: Bearer update_me_please`.
+4. Observe that the server accepts the authentication and processes the upload instead of rejecting it with a 401 Unauthorized status.
+
+✅ Recommended Remediation
+Remove the weak default fallback. If the `AETHER_UPLOAD_KEY` is not set, the server should fail securely.
+1. Return a 401 Unauthorized status if the key is not configured, OR
+2. Prevent the application from starting entirely if critical secrets are missing in production.
+
+Example fix for immediate failure on the endpoint:
+```rust
+let expected_key = match std::env::var("AETHER_UPLOAD_KEY") {
+    Ok(key) => key,
+    Err(_) => return Err((axum::http::StatusCode::INTERNAL_SERVER_ERROR, "Server misconfigured: Upload key not set".to_string())),
+};
+```
+
+🔗 References
+- OWASP Broken Authentication: https://owasp.org/www-project-top-10/2017/A2_2017-Broken_Authentication
+- CWE-1188: Insecure Default Initialization of Resource: https://cwe.mitre.org/data/definitions/1188.html
