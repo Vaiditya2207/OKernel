@@ -46,3 +46,40 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+Title: 🛡️ CRITICAL Broken Auth: Weak default fallback for AETHER_UPLOAD_KEY in upload_handler
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` in `syscore/src/server/aether.rs` contains a Broken Auth vulnerability due to a weak default fallback mechanism. If the `AETHER_UPLOAD_KEY` environment variable is not explicitly set, the application falls back to a hardcoded, weak credential `"update_me_please"`.
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+```
+
+Because of this fallback, any unauthorized user who knows or guesses this default value can authenticate to the upload endpoint and upload potentially malicious versions.
+
+🎯 Potential Impact
+An unauthenticated attacker can use the default credential `"update_me_please"` to upload and publish new, malicious versions to the Aether update server. This could lead to a supply chain attack, as users downloading the updates would receive the attacker's compromised versions.
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service without setting the `AETHER_UPLOAD_KEY` environment variable.
+2. Construct a multipart POST request to the `/api/v1/aether` upload endpoint.
+3. Provide the authentication header: `Authorization: Bearer update_me_please`.
+4. Include the required form fields (`version`, `file`, etc.).
+5. Send the request and observe that the version is successfully published despite not having valid credentials configured.
+
+✅ Recommended Remediation
+Remove the insecure fallback and fail securely if the environment variable is not present. If the variable is missing, the application should either fail to start or the endpoint should reject all requests until a proper key is configured.
+
+Example fix:
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "AETHER_UPLOAD_KEY is not configured on the server".to_string()))?;
+```
+
+🔗 References
+- OWASP Broken Authentication: https://owasp.org/www-project-top-ten/2017/A2_2017-Broken_Authentication
+- CWE-798: Use of Hard-coded Credentials: https://cwe.mitre.org/data/definitions/798.html
