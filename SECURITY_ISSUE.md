@@ -46,3 +46,42 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+Title: 🛡️ CRITICAL Broken Auth: Weak default fallback for AETHER_UPLOAD_KEY in upload_handler
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Authentication vulnerability. When validating the API Key provided in the `Authorization` header, the code checks against the `AETHER_UPLOAD_KEY` environment variable. If this variable is missing, it falls back to a hardcoded, weak default value (`"update_me_please"`):
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+```
+
+This allows an attacker to bypass authentication entirely if the deployment omits this environment variable, as they can simply provide `Bearer update_me_please`.
+
+🎯 Potential Impact
+An unauthorized attacker can trivially authenticate to the Aether release system and upload malicious binaries or patches. This can compromise the software supply chain, leading to malware distribution to all end-users downloading updates from this service.
+
+🛠️ Steps to Reproduce
+1. Deploy the `syscore` backend service without setting the `AETHER_UPLOAD_KEY` environment variable.
+2. Send a POST request to `/api/v1/aether` with an upload payload.
+3. Include the header `Authorization: Bearer update_me_please`.
+4. Observe that the server accepts the upload with a `201 Created` status instead of a `401 Unauthorized`.
+
+✅ Recommended Remediation
+The application should fail securely if a critical secret is missing. Remove the fallback value and return an internal server error or configuration error if the key is not set.
+
+Example fix:
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").map_err(|_| {
+    tracing::error!("AETHER_UPLOAD_KEY is not configured");
+    (StatusCode::INTERNAL_SERVER_ERROR, "Server authentication misconfigured".to_string())
+})?;
+```
+
+🔗 References
+- OWASP Broken Access Control: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+- CWE-798: Use of Hard-coded Credentials: https://cwe.mitre.org/data/definitions/798.html
