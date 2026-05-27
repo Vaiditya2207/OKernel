@@ -46,3 +46,47 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+---
+
+Title: 🛡️ CRITICAL Broken Auth: Weak Default Fallback for Aether API Key
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Auth vulnerability due to a weak default fallback for the `AETHER_UPLOAD_KEY` environment variable. If the environment variable is not set, the code silently falls back to the hardcoded string "update_me_please" instead of returning an error or refusing to start.
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+
+if auth_header != Some(&expected_key) {
+    return Err((StatusCode::UNAUTHORIZED, "Invalid or missing API Key".to_string()));
+}
+```
+
+This means that if the service is deployed without the `AETHER_UPLOAD_KEY` explicitly configured, an attacker can use "update_me_please" as the bearer token to authenticate successfully.
+
+🎯 Potential Impact
+An unauthenticated attacker can trivially bypass authentication on the Aether version upload endpoint. Since this endpoint handles file uploads and overwrites, this vulnerability, especially when combined with the Arbitrary File Write vulnerability, allows an attacker to upload arbitrary files, overwrite system files, and potentially achieve Remote Code Execution (RCE).
+
+🛠️ Steps to Reproduce
+1. Ensure the `syscore` backend service is running without the `AETHER_UPLOAD_KEY` environment variable set.
+2. Send a POST request to the `/api/v1/aether` upload endpoint.
+3. Include the header `Authorization: Bearer update_me_please`.
+4. Observe that the request is authorized and processed.
+
+✅ Recommended Remediation
+Remove the `unwrap_or_else` fallback. The application should either fail to start if the required secret is missing, or the endpoint should consistently reject requests (e.g., returning 500 Internal Server Error) if the configuration is incomplete.
+
+Example fix:
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").map_err(|_| {
+    (StatusCode::INTERNAL_SERVER_ERROR, "Server configuration error: missing upload key".to_string())
+})?;
+```
+
+🔗 References
+- OWASP Broken Access Control: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+- CWE-1188: Initialization of a Resource with an Insecure Default: https://cwe.mitre.org/data/definitions/1188.html
