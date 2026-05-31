@@ -46,3 +46,41 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+Title: 🛡️ [CRITICAL] Broken Auth: Hardcoded default API key in Aether upload handler
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Authentication vulnerability due to a weak, hardcoded default API key.
+When attempting to retrieve the expected upload key from the environment variable `AETHER_UPLOAD_KEY`, the code uses `unwrap_or_else` to fall back to the string `"update_me_please"` if the environment variable is not set.
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+```
+
+This ensures that if a system administrator forgets to set the `AETHER_UPLOAD_KEY` environment variable or misconfigures the deployment, the server will silently fall back to accepting `"update_me_please"` as a valid bearer token for authentication.
+
+🎯 Potential Impact
+An unauthenticated attacker can trivially bypass authentication on the `/api/v1/aether` upload endpoint by providing the `Authorization: Bearer update_me_please` header. This allows unauthorized users to publish arbitrary files, bundles, and metadata, poisoning the update distribution channel.
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service without setting the `AETHER_UPLOAD_KEY` environment variable.
+2. Send an HTTP POST request to `/api/v1/aether`.
+3. Include the header `Authorization: Bearer update_me_please`.
+4. Observe that the server accepts the authentication and processes the multipart upload, rather than returning a `401 UNAUTHORIZED`.
+
+✅ Recommended Remediation
+Remove the weak default fallback. The application should fail securely (fail-closed) if the required secret is not provided in the environment.
+
+Example fix:
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY")
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Server misconfiguration: missing API key".to_string()))?;
+```
+
+🔗 References
+- OWASP Broken Authentication: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+- CWE-798: Use of Hard-coded Credentials: https://cwe.mitre.org/data/definitions/798.html
