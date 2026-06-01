@@ -46,3 +46,38 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+Title: 🛡️ [CRITICAL] Broken Auth: Hardcoded default API key in Aether upload handler
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Auth vulnerability because it falls back to a weak, hardcoded default credential ("update_me_please") when the `AETHER_UPLOAD_KEY` environment variable is not set.
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+```
+
+This allows any attacker to bypass authentication on a sensitive file upload endpoint if the service is deployed without the environment variable explicitly configured.
+
+🎯 Potential Impact
+An unauthorized user can upload arbitrary Aether versions and metadata to the server. Combined with the Arbitrary File Write vulnerability in the same handler, this easily leads to complete unauthenticated Remote Code Execution (RCE) on the server.
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service without setting `AETHER_UPLOAD_KEY`.
+2. Make a POST request to `/api/v1/aether` (the upload endpoint).
+3. Include the header `Authorization: Bearer update_me_please`.
+4. Observe that the request is accepted instead of returning a 401 Unauthorized error.
+
+✅ Recommended Remediation
+Do not provide a default fallback for sensitive credentials. If the environment variable is missing, the service should fail securely by returning a configuration error or crashing on startup.
+Instead of using `unwrap_or_else`, use `Result` handling, or crash on startup if missing.
+
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").expect("AETHER_UPLOAD_KEY environment variable must be set");
+```
+
+🔗 References
+- OWASP Broken Authentication: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
