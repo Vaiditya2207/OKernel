@@ -46,3 +46,28 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+Title: 🛡️ CRITICAL Arbitrary File Write & Broken Auth: Unsanitized filenames and weak default credentials in Aether upload_handler
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` in `syscore/src/server/aether.rs` is vulnerable to two critical issues:
+1. **Broken Auth**: On line 315, the handler uses `unwrap_or_else` to supply a weak default API key (`update_me_please`) if the `AETHER_UPLOAD_KEY` environment variable is not set.
+2. **Arbitrary File Write / Path Traversal**: Starting from line 387, user-controlled filenames (`filename`, `bundle_filename`, `patch_filename`) extracted from multipart form data are passed directly to `version_dir.join()` without any sanitization. This allows an attacker to upload files to arbitrary locations on the filesystem by including path traversal sequences (e.g., `../../`) in the filename.
+
+🎯 Potential Impact
+An unauthorized attacker can trivially authenticate using the default key and leverage the path traversal vulnerability to write or overwrite arbitrary files on the server with the permissions of the running application, potentially leading to Remote Code Execution (RCE) or complete system compromise.
+
+🛠️ Steps to Reproduce
+1. Send a POST request to `/api/v1/aether/upload` with the `Authorization: Bearer update_me_please` header.
+2. Include a multipart form data payload with a file field where the filename is `../../../tmp/pwned.txt`.
+3. Observe that the file is written to `/tmp/pwned.txt` on the server instead of the intended version directory.
+
+✅ Recommended Remediation
+- **Broken Auth**: Remove the fallback default key. The application should fail securely and refuse to start or reject requests if `AETHER_UPLOAD_KEY` is missing.
+- **Arbitrary File Write**: Sanitize all user-supplied filenames before using them in `PathBuf::join`. For example, use `std::path::Path::new(&filename).file_name().and_then(|name| name.to_str())` to extract only the final file component and discard any directory traversal sequences.
+
+🔗 References
+- OWASP Path Traversal: https://owasp.org/www-community/attacks/Path_Traversal
+- OWASP Broken Authentication: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
