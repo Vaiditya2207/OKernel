@@ -46,3 +46,37 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+Title: 🛡️ CRITICAL Broken Auth: Hardcoded default fallback for AETHER_UPLOAD_KEY
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Authentication vulnerability due to a weak default fallback credential. If the `AETHER_UPLOAD_KEY` environment variable is not set, the application falls back to a hardcoded string `"update_me_please"`.
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+```
+This means any deployment missing this environment variable will be completely open to unauthorized access using a trivial, universally known password.
+
+🎯 Potential Impact
+An unauthenticated attacker can supply the default credential (`Bearer update_me_please`) to gain full administrative access to the `upload_handler`. This allows the attacker to upload malicious payloads, manipulate release versions, and potentially distribute malware to all users of the Aether application, compromising the entire software supply chain.
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service without setting the `AETHER_UPLOAD_KEY` environment variable.
+2. Send a POST request to the `/api/v1/aether` upload endpoint.
+3. Provide the authentication header: `Authorization: Bearer update_me_please`.
+4. Include a valid multipart form payload for a new version upload.
+5. Observe that the server accepts the upload and returns a `201 Created` status, successfully bypassing intended authentication.
+
+✅ Recommended Remediation
+Do not provide default fallback values for security-critical secrets. Ensure the application fails to start or the endpoint returns an error securely if the secret is missing.
+Example fix:
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY")
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Server configuration error".to_string()))?;
+```
+
+🔗 References
+- OWASP Broken Authentication: https://owasp.org/www-project-top-ten/2017/A2_2017-Broken_Authentication
