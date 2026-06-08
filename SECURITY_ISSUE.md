@@ -46,3 +46,36 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+Title: 🛡️ CRITICAL Broken Auth: Weak Default Fallback for Aether Upload Key
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Auth vulnerability because it defaults to a known weak API key if the `AETHER_UPLOAD_KEY` environment variable is not set.
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+```
+If the deployment environment fails to provide the `AETHER_UPLOAD_KEY`, the system quietly degrades to using "update_me_please".
+
+🎯 Potential Impact
+Any unauthorized user who knows the default credential can upload malicious bundles to the Aether update server. This allows attackers to distribute compromised software updates to all clients, leading to a massive supply chain attack.
+
+🛠️ Steps to Reproduce
+1. Deploy the `syscore` backend service without setting the `AETHER_UPLOAD_KEY` environment variable.
+2. Construct a multipart POST request to the `/api/v1/aether` upload endpoint.
+3. Provide the default authentication header: `Authorization: Bearer update_me_please`.
+4. Observe that the server accepts the upload, demonstrating the default credential is active.
+
+✅ Recommended Remediation
+Do not provide weak fallbacks for security credentials. If a required secret is missing, the application should fail securely (e.g., return a 500 error or refuse to start).
+
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Server configuration error: Missing API Key".to_string()))?;
+```
+
+🔗 References
+- OWASP Broken Authentication: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
