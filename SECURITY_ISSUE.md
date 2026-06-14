@@ -46,3 +46,53 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+---
+
+Title: 🛡️ CRITICAL Broken Auth: Weak default fallback credential in Aether upload handler
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a severe Broken Authentication vulnerability. When validating the Authorization header, the server attempts to read the expected API key from the `AETHER_UPLOAD_KEY` environment variable. However, it uses `unwrap_or_else` to fall back to a hardcoded, weak default credential (`"update_me_please"`) if the environment variable is not set.
+
+```rust
+// syscore/src/server/aether.rs
+// 1. Auth Check
+let auth_header = headers.get("Authorization")
+    .and_then(|h| h.to_str().ok())
+    .and_then(|h| h.strip_prefix("Bearer "));
+
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+
+if auth_header != Some(&expected_key) {
+    return Err((StatusCode::UNAUTHORIZED, "Invalid or missing API Key".to_string()));
+}
+```
+
+If the `AETHER_UPLOAD_KEY` is accidentally omitted during deployment, any unauthenticated attacker can upload malicious software updates by simply using the well-known string `"update_me_please"` as the Bearer token.
+
+🎯 Potential Impact
+An attacker can authenticate to the restricted `/api/v1/aether` endpoint and push malicious application updates (bundles and patches) to clients. This allows for massive supply chain attacks where legitimate users automatically download and execute attacker-controlled payloads on their machines, leading to widespread compromise.
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service in an environment where `AETHER_UPLOAD_KEY` is not set.
+2. Construct a multipart POST request to the `/api/v1/aether` endpoint.
+3. Set the `Authorization` header to `Bearer update_me_please`.
+4. Send the request with required multipart fields (`version`, `file`, etc.).
+5. Observe that the server returns a `201 CREATED` response instead of `401 UNAUTHORIZED`, successfully publishing the malicious update.
+
+✅ Recommended Remediation
+Remove the weak default fallback credential. The application should fail securely (e.g., fail to start or reject all upload requests) if the required environment variable is missing.
+
+Example fix:
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY")
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Server misconfiguration: AETHER_UPLOAD_KEY not set".to_string()))?;
+```
+Alternatively, read the configuration once at startup and panic if the secret is missing, rather than evaluating it per request.
+
+🔗 References
+- OWASP Broken Authentication: https://owasp.org/www-project-top-ten/2017/A2_2017-Broken_Authentication
+- CWE-798: Use of Hard-coded Credentials: https://cwe.mitre.org/data/definitions/798.html
