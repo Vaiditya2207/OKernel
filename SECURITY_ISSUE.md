@@ -46,3 +46,39 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+Title: 🛡️ CRITICAL Broken Auth: Weak Default Fallback Credential in Aether Upload Handler
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Auth vulnerability because it falls back to a weak, hardcoded default credential if the `AETHER_UPLOAD_KEY` environment variable is not set.
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+```
+This means that if an administrator forgets to set the environment variable, the upload endpoint is completely open to anyone who provides the bearer token `update_me_please`.
+
+🎯 Potential Impact
+An unauthenticated attacker can use the default credential to upload malicious application bundles or overwrite existing versions. This could allow an attacker to distribute backdoored application updates to users, leading to wide-scale compromise.
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service without setting the `AETHER_UPLOAD_KEY` environment variable.
+2. Send a multipart POST request to `/api/v1/aether` to upload a new version.
+3. Provide the authentication header: `Authorization: Bearer update_me_please`.
+4. Observe that the request is accepted and the file is written, rather than returning a `401 UNAUTHORIZED`.
+
+✅ Recommended Remediation
+Remove the `unwrap_or_else` fallback. The application should fail to start if the required secret is not provided, or the handler should explicitly fail the request if the secret is missing.
+
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").map_err(|_| {
+    tracing::error!("AETHER_UPLOAD_KEY not set. Refusing uploads.");
+    (StatusCode::INTERNAL_SERVER_ERROR, "Server misconfiguration".to_string())
+})?;
+```
+
+🔗 References
+- OWASP Broken Authentication: https://owasp.org/www-project-top-10/2017/A2_2017-Broken_Authentication
+- CWE-798: Use of Hard-coded Credentials: https://cwe.mitre.org/data/definitions/798.html
