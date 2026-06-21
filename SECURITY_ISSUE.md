@@ -1,48 +1,67 @@
-Title: 🛡️ CRITICAL Arbitrary File Write: Unsanitized filename in Aether version upload handler
+Title: 🛡️ CRITICAL Logic Flaw: Denial of Service via Unbounded Docker Wait
 
 🚨 Severity
 CRITICAL
 
 💡 Description
-The `upload_handler` function in `syscore/src/server/aether.rs` contains an Arbitrary File Write vulnerability due to the lack of sanitization on the `filename` provided in the multipart form data.
-In Rust, `std::path::PathBuf::join` replaces the entire base path if the appended string is an absolute path. The `filename` extracted from `multipart.next_field()` is directly joined to `version_dir`:
+A Denial of Service (DoS) vulnerability exists in `syscore/src/docker/manager.rs` within the `ContainerManager::execute` function. This function creates an ephemeral Docker container to execute user-submitted code from the `/api/execute` endpoint. The execution logic waits for the container to exit using `docker.wait_container::<String>(&id, None).next().await;` without applying any explicit timeout mechanisms.
 
 ```rust
-// syscore/src/server/aether.rs
-let file_path = version_dir.join(&filename);
-tokio_fs::write(&file_path, &file_bytes).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+// syscore/src/docker/manager.rs (Lines 226-231)
+// 6. Wait for execution to finish
+let wait_res = self.docker.wait_container::<String>(&id, None).next().await;
+
+if let Some(Ok(res)) = wait_res {
+     tracing::debug!("[Job {}] Container exited with code {}", job_id, res.status_code);
+} else {
+// ...
 ```
 
-Because `filename` is attacker-controlled and unsanitized, an attacker can provide an absolute path (e.g., `/etc/passwd` or `/root/.ssh/authorized_keys`) as the `filename`. `PathBuf::join` will discard the `version_dir` and write the uploaded file contents directly to the attacker-specified absolute path on the host filesystem.
+If an attacker submits a payload containing an infinite loop (e.g., `while True: pass` in Python), the container will run indefinitely. Because there is no timeout on `wait_container`, the backend thread handling the request will block forever. Repeated requests with similar payloads will rapidly exhaust the server's thread pool and connection limits, rendering the application unavailable.
 
 🎯 Potential Impact
-An authenticated attacker (even using the weak default `AETHER_UPLOAD_KEY` of "update_me_please") can overwrite arbitrary files on the system with the permissions of the user running the `syscore` backend service. This can lead to Remote Code Execution (RCE) by overwriting `.ssh/authorized_keys`, cron jobs, or system binaries, leading to complete system compromise.
+An unauthenticated attacker can submit malicious code to the `/api/execute` endpoint. By providing code that never terminates, the attacker can force the backend server threads to hang indefinitely. Once all available threads or resources are exhausted, the server will stop responding to legitimate requests, resulting in a complete Denial of Service.
 
 🛠️ Steps to Reproduce
 1. Start the `syscore` backend service.
-2. Construct a multipart POST request to the `/api/v1/aether` upload endpoint.
-3. Provide the default authentication header: `Authorization: Bearer update_me_please`.
-4. Include form fields for `version` (e.g., `1.0.0`), `description`, and `changelog`.
-5. Include a file upload field with the name `file`. Set the filename parameter in the Content-Disposition header to an absolute path, such as `/tmp/pwned.txt`.
-6. Send the request.
-7. Observe that the file `pwned.txt` is created in `/tmp` containing the uploaded payload, instead of within the intended `storage/aether/1.0.0/` directory.
+2. Construct a POST request to the `/api/execute` endpoint.
+3. Include a JSON payload with an infinite loop:
+   ```json
+   {
+     "language": "python",
+     "code": "while True:\n    pass\n"
+   }
+   ```
+4. Send the request. Notice that the request does not return.
+5. Send several similar requests concurrently.
+6. Observe that the server becomes unresponsive to other API endpoints because threads are stuck waiting for containers that will never exit.
 
 ✅ Recommended Remediation
-Implement strict path sanitization for the `filename` extracted from the multipart request before using it with `PathBuf::join`.
-1. Reject any filename containing path separators (`/` or `\`).
-2. Alternatively, extract only the final file component using `std::path::Path::new(&filename).file_name()`.
-3. Ensure the resolved path remains within the intended storage directory bounds.
+Wrap the `docker.wait_container` call with an explicit timeout using `tokio::time::timeout`. If the timeout expires before the container finishes, forcibly kill and remove the container to free up resources.
 
 Example fix:
 ```rust
-let safe_filename = std::path::Path::new(&filename)
-    .file_name()
-    .and_then(|name| name.to_str())
-    .ok_or((StatusCode::BAD_REQUEST, "Invalid filename".to_string()))?;
+use std::time::Duration;
+use tokio::time::timeout;
 
-let file_path = version_dir.join(safe_filename);
+let wait_future = self.docker.wait_container::<String>(&id, None).next();
+let timeout_duration = Duration::from_secs(10); // e.g., 10 seconds timeout
+
+match timeout(timeout_duration, wait_future).await {
+    Ok(Some(Ok(res))) => {
+        tracing::debug!("[Job {}] Container exited with code {}", job_id, res.status_code);
+    }
+    Ok(_) => {
+        tracing::warn!("[Job {}] Wait failed or container crashed specifically", job_id);
+    }
+    Err(_) => {
+        tracing::error!("[Job {}] Execution timed out, killing container...", job_id);
+        // Force remove or stop container here
+        let _ = self.docker.stop_container(&id, None).await;
+    }
+}
 ```
 
 🔗 References
-- Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
-- OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+- Tokio Timeout Documentation: https://docs.rs/tokio/latest/tokio/time/fn.timeout.html
+- OWASP Denial of Service Cheat Sheet: https://cheatsheetseries.owasp.org/cheatsheets/Denial_of_Service_Cheat_Sheet.html
