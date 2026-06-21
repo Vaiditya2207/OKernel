@@ -46,3 +46,59 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+---
+
+Title: 🛡️ CRITICAL DoS: Unbounded Wait in Docker Container Execution
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `execute` function in `syscore/src/docker/manager.rs` orchestrates the execution of untrusted user code inside a Docker container. However, it fails to enforce an execution timeout when waiting for the container to finish. Specifically, it uses `.next().await` on the stream returned by `docker.wait_container` without wrapping it in a timeout:
+
+```rust
+// syscore/src/docker/manager.rs, around line 227
+let wait_res = self.docker.wait_container::<String>(&id, None).next().await;
+```
+
+Because the `/api/execute` endpoint is unauthenticated and accepts arbitrary code (e.g., Python or C++ scripts containing infinite loops like `while True: pass`), an attacker can submit code that never exits. The backend task will hang indefinitely waiting for the container to terminate, leading to unbounded resource consumption (both container compute resources and backend Tokio worker threads).
+
+🎯 Potential Impact
+An attacker could repeatedly submit infinite loop payloads to the `/api/execute` endpoint. This will quickly exhaust the server's Tokio async workers, Docker container limits, and CPU/Memory resources, resulting in a complete Denial of Service (DoS) for all backend services.
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service.
+2. Send a POST request to the `/api/execute` endpoint containing an infinite loop payload in Python:
+   ```json
+   {
+       "language": "python",
+       "code": "while True: pass"
+   }
+   ```
+3. Observe that the API request never completes and hangs indefinitely.
+4. Send multiple concurrent requests to exhaust worker threads.
+5. Verify that the Docker container continues running indefinitely and the backend becomes unresponsive.
+
+✅ Recommended Remediation
+Implement an explicit timeout when waiting for the container to complete. Wrap the `.next().await` call in `tokio::time::timeout` and ensure the container is forcefully killed if it exceeds the allowed execution time limit.
+
+Example fix:
+```rust
+use std::time::Duration;
+use tokio::time::timeout;
+
+let wait_future = self.docker.wait_container::<String>(&id, None).next();
+let wait_res = match timeout(Duration::from_secs(10), wait_future).await {
+    Ok(res) => res,
+    Err(_) => {
+        tracing::warn!("[Job {}] Execution timed out, killing container", job_id);
+        // Container will be cleaned up in the cleanup step
+        None
+    }
+};
+```
+
+🔗 References
+- OWASP Denial of Service: https://owasp.org/www-community/attacks/Denial_of_Service
+- Tokio Timeout Documentation: https://docs.rs/tokio/latest/tokio/time/fn.timeout.html
