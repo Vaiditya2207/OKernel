@@ -46,3 +46,52 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+---
+
+Title: 🛡️ CRITICAL Broken Auth: Hardcoded fallback API key in Aether upload handler
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Authentication vulnerability due to a hardcoded fallback credential.
+When checking the authorization header, the code attempts to read the `AETHER_UPLOAD_KEY` environment variable. If this variable is not set, it uses `unwrap_or_else` to fall back to a hardcoded string `"update_me_please"`:
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+
+if auth_header != Some(&expected_key) {
+    return Err((StatusCode::UNAUTHORIZED, "Invalid or missing API Key".to_string()));
+}
+```
+
+This means that in environments where the administrator forgets to set the `AETHER_UPLOAD_KEY` environment variable, the upload endpoint is effectively protected by a publicly known, weak credential.
+
+🎯 Potential Impact
+An unauthenticated remote attacker can easily guess or discover the default `"update_me_please"` credential. By using this credential, the attacker can upload arbitrary files or malicious updates to the Aether release system. When combined with other vulnerabilities (such as arbitrary file write), this can lead to remote code execution and full system compromise. Furthermore, it allows malicious actors to distribute compromised versions to clients.
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service without setting the `AETHER_UPLOAD_KEY` environment variable.
+2. Send a multipart POST request to the `/api/v1/aether` endpoint.
+3. Include the header: `Authorization: Bearer update_me_please`.
+4. Include required multipart fields (`version`, `file`, etc.).
+5. Observe that the server accepts the request and processes the upload instead of rejecting it with an unauthorized error.
+
+✅ Recommended Remediation
+Remove the hardcoded fallback completely. If the `AETHER_UPLOAD_KEY` environment variable is missing or empty, the server should securely reject all upload requests.
+
+Example fix:
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY")
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Server misconfiguration: AETHER_UPLOAD_KEY not set".to_string()))?;
+
+if auth_header != Some(&expected_key) {
+    return Err((StatusCode::UNAUTHORIZED, "Invalid or missing API Key".to_string()));
+}
+```
+
+🔗 References
+- OWASP Broken Authentication: https://owasp.org/www-project-top-ten/2017/A2_2017-Broken_Authentication
+- CWE-798: Use of Hard-coded Credentials: https://cwe.mitre.org/data/definitions/798.html
