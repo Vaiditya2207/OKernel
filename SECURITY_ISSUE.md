@@ -46,3 +46,37 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+Title: 🛡️ CRITICAL Broken Auth: Hardcoded weak fallback credential in Aether upload_handler
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Authentication vulnerability due to a hardcoded fallback credential. When the environment variable `AETHER_UPLOAD_KEY` is not present, the system defaults to using the weak static key `"update_me_please"`.
+
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+```
+
+This allows any unauthenticated attacker who knows this default key to bypass authentication and upload files to the server.
+
+🎯 Potential Impact
+An unauthenticated attacker can upload malicious bundles, patches, or files to the server. Combined with the arbitrary file write vulnerability, this leads to an unauthenticated Remote Code Execution (RCE) and full server compromise. Even without the file write vulnerability, it allows unauthorized distribution of malicious software updates to clients.
+
+🛠️ Steps to Reproduce
+1. Ensure the `syscore` backend service is running without the `AETHER_UPLOAD_KEY` environment variable set.
+2. Send a POST request to `/api/v1/aether` with the header `Authorization: Bearer update_me_please`.
+3. Include valid multipart form data (e.g., `version`, `file`).
+4. Observe that the server accepts the upload and returns a 201 Created response.
+
+✅ Recommended Remediation
+Remove the weak default fallback. The application should securely fail or refuse to start if critical secrets like `AETHER_UPLOAD_KEY` are not provided in the environment.
+
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY")
+    .expect("FATAL: AETHER_UPLOAD_KEY environment variable is missing.");
+```
+
+🔗 References
+- OWASP Broken Authentication: https://owasp.org/www-project-top-ten/2017/A2_2017-Broken_Authentication
