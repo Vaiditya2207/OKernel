@@ -46,3 +46,50 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+---
+
+Title: 🛡️ CRITICAL Broken Auth: Weak Default Fallback for AETHER_UPLOAD_KEY
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Auth vulnerability due to a weak default fallback for the `AETHER_UPLOAD_KEY` environment variable.
+When extracting the expected authentication key, the code uses `unwrap_or_else` to supply a hardcoded string `"update_me_please"` if the environment variable is not set.
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+
+if auth_header != Some(&expected_key) {
+    return Err((StatusCode::UNAUTHORIZED, "Invalid or missing API Key".to_string()));
+}
+```
+If the backend is deployed without explicitly configuring the `AETHER_UPLOAD_KEY` environment variable, the endpoint will silently accept the known hardcoded password `"update_me_please"`.
+
+🎯 Potential Impact
+An attacker can easily bypass authentication on the Aether upload endpoint by providing the known default credential (`Authorization: Bearer update_me_please`). This grants them unauthorized access to upload new release bundles, patches, and metadata. By publishing a malicious release, an attacker could compromise all users downloading updates from this channel (supply chain attack).
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service without setting the `AETHER_UPLOAD_KEY` environment variable.
+2. Construct a multipart POST request to the `/api/v1/aether` upload endpoint.
+3. Include the default authorization header: `Authorization: Bearer update_me_please`.
+4. Provide dummy valid fields for `version` (e.g., `9.9.9`), `file`, etc.
+5. Send the request.
+6. Observe that the server responds with a `201 CREATED` status and accepts the upload, demonstrating successful authentication bypass.
+
+✅ Recommended Remediation
+Remove the default fallback for the authentication key. The application should fail securely if the environment variable is missing. It is recommended to validate the presence of the environment variable at startup and panic or exit if it is missing. At the handler level, return an error if it cannot be retrieved.
+
+Example fix at handler level:
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").map_err(|_| {
+    (StatusCode::INTERNAL_SERVER_ERROR, "Server misconfiguration: missing API key".to_string())
+})?;
+```
+
+🔗 References
+- OWASP Broken Access Control: https://owasp.org/Top10/A01_2021-Broken_Access_Control/
+- CWE-1188: Initialization of a Resource with an Insecure Default: https://cwe.mitre.org/data/definitions/1188.html
+- CWE-798: Use of Hard-coded Credentials: https://cwe.mitre.org/data/definitions/798.html
