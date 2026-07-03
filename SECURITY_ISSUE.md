@@ -46,3 +46,52 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+---
+
+Title: 🛡️ CRITICAL Broken Auth: Hardcoded Fallback API Key in Aether Upload Handler
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Authentication vulnerability due to a hardcoded fallback API key.
+When checking the authorization header, the code attempts to read the `AETHER_UPLOAD_KEY` environment variable. If this variable is not set, it uses `unwrap_or_else` to fallback to the hardcoded string `"update_me_please"`.
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+
+if auth_header != Some(&expected_key) {
+    return Err((StatusCode::UNAUTHORIZED, "Invalid or missing API Key".to_string()));
+}
+```
+
+This insecure default means that if the server is deployed without explicitly configuring the `AETHER_UPLOAD_KEY` environment variable, an attacker can authenticate to the upload endpoint using the well-known credential `"update_me_please"`.
+
+🎯 Potential Impact
+An unauthenticated attacker can leverage the weak default credential to successfully authenticate to the `/api/v1/aether` upload endpoint. This allows them to upload arbitrary Aether versions, potentially distributing malicious updates to users or leveraging the concurrent Arbitrary File Write vulnerability to achieve Remote Code Execution (RCE) on the server.
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service without setting the `AETHER_UPLOAD_KEY` environment variable.
+2. Send a POST request to `/api/v1/aether` with the authorization header `Authorization: Bearer update_me_please`.
+3. Provide the required multipart fields (`version`, `file`).
+4. Observe that the server returns a `201 CREATED` status code, indicating successful authentication and upload.
+
+✅ Recommended Remediation
+Remove the hardcoded fallback credential. The application should fail securely if the expected environment variable is missing.
+Ideally, the server should validate required configuration at startup and refuse to start if sensitive keys are not provided. At the handler level, it should return an authentication failure if the key cannot be read.
+
+Example fix at the handler level:
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY")
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Server configuration error".to_string()))?;
+
+if auth_header != Some(&expected_key) {
+    return Err((StatusCode::UNAUTHORIZED, "Invalid or missing API Key".to_string()));
+}
+```
+
+🔗 References
+- OWASP Broken Authentication: https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/
+- CWE-798: Use of Hard-coded Credentials: https://cwe.mitre.org/data/definitions/798.html
