@@ -46,3 +46,35 @@ let file_path = version_dir.join(safe_filename);
 🔗 References
 - Rust `PathBuf::join` documentation: https://doc.rust-lang.org/std/path/struct.PathBuf.html#method.join
 - OWASP Path Traversal / Arbitrary File Write: https://owasp.org/www-community/attacks/Path_Traversal
+
+Title: 🛡️ CRITICAL Broken Auth: Hardcoded default API key in Aether upload handler
+
+🚨 Severity
+CRITICAL
+
+💡 Description
+The `upload_handler` function in `syscore/src/server/aether.rs` contains a Broken Authentication vulnerability due to a hardcoded fallback credential. When the `AETHER_UPLOAD_KEY` environment variable is not set, the application defaults to the weak, hardcoded string `"update_me_please"`.
+
+```rust
+// syscore/src/server/aether.rs
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").unwrap_or_else(|_| "update_me_please".to_string());
+```
+
+🎯 Potential Impact
+An unauthorized attacker can trivially bypass authentication by using the default credential. They can then upload malicious binaries or patches, potentially distributing malware to clients downloading updates. Combined with other vulnerabilities, this can lead to complete system compromise.
+
+🛠️ Steps to Reproduce
+1. Start the `syscore` backend service without setting the `AETHER_UPLOAD_KEY` environment variable.
+2. Send a POST request to `/api/v1/aether` to upload a file.
+3. Include the HTTP header: `Authorization: Bearer update_me_please`.
+4. Observe that the request is successfully authenticated and processed, resulting in an unauthorized file upload.
+
+✅ Recommended Remediation
+Remove the hardcoded default fallback. If the `AETHER_UPLOAD_KEY` is missing, the application should either fail to start or the endpoint should explicitly deny all upload requests.
+
+```rust
+let expected_key = std::env::var("AETHER_UPLOAD_KEY").map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "AETHER_UPLOAD_KEY not configured".to_string()))?;
+```
+
+🔗 References
+- CWE-798: Use of Hard-coded Credentials: https://cwe.mitre.org/data/definitions/798.html
